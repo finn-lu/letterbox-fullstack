@@ -1,5 +1,15 @@
 -- Supabase SQL: Create tables for Letterbox
 
+-- Profile table (optional, for additional user info)
+CREATE TABLE IF NOT EXISTS profiles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  display_name VARCHAR(255),
+  avatar_url TEXT,
+  created_at TIMESTAMP DEFAULT now(),
+  updated_at TIMESTAMP DEFAULT now()
+);
+
 -- Ratings table
 CREATE TABLE IF NOT EXISTS ratings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

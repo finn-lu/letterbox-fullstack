@@ -37,6 +37,7 @@ copy .env.example .env
 Required env variables in `backend/.env`:
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
+- `FRONTEND_ORIGIN` (e.g. `http://localhost:3000`)
 
 Run API:
 ```bash
@@ -49,6 +50,19 @@ cd frontend
 npm install
 npm run dev
 ```
+
+Optional env in `frontend/.env.local`:
+- `BACKEND_API_URL=http://127.0.0.1:8000`
+
+The frontend now proxies auth calls via Next.js route handlers (`/api/auth/*`),
+so browser-side CORS issues are minimized during local development.
+
+## Auth Starter (Industry-Style Learning Baseline)
+- `POST /auth/register` → creates Supabase auth user
+- `POST /auth/login` → returns bearer access token + refresh token
+- `GET /auth/me` → returns current user from bearer token
+
+Frontend home page now includes a minimal Register/Login/Profile flow to learn end-to-end auth.
 
 ## Baseline Commit Checklist
 - Ensure `backend/.env` is **not** tracked

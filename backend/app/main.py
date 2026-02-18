@@ -1,7 +1,24 @@
+import os
+
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+
 from app.database import supabase
+from app.routes.auth import router as auth_router
 
 app = FastAPI()
+
+frontend_origin = os.getenv("FRONTEND_ORIGIN", "http://localhost:3000")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[frontend_origin, "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(auth_router)
 
 @app.get("/")
 def root():

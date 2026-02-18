@@ -46,41 +46,70 @@ ALTER TABLE ratings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE watchlist ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policy: Users can only see and edit their own ratings
+DROP POLICY IF EXISTS "Users can view their own ratings" ON ratings;
 CREATE POLICY "Users can view their own ratings" ON ratings
   FOR SELECT USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert their own ratings" ON ratings;
 CREATE POLICY "Users can insert their own ratings" ON ratings
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own ratings" ON ratings;
 CREATE POLICY "Users can update their own ratings" ON ratings
   FOR UPDATE USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete their own ratings" ON ratings;
 CREATE POLICY "Users can delete their own ratings" ON ratings
   FOR DELETE USING (auth.uid() = user_id);
 
 -- RLS Policy: Users can only see and edit their own watchlist
+DROP POLICY IF EXISTS "Users can view their own watchlist" ON watchlist;
 CREATE POLICY "Users can view their own watchlist" ON watchlist
   FOR SELECT USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert their own watchlist" ON watchlist;
 CREATE POLICY "Users can insert their own watchlist" ON watchlist
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own watchlist" ON watchlist;
 CREATE POLICY "Users can update their own watchlist" ON watchlist
   FOR UPDATE USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete their own watchlist" ON watchlist;
 CREATE POLICY "Users can delete their own watchlist" ON watchlist
   FOR DELETE USING (auth.uid() = user_id);
 
 -- RLS Policy: Users can view their own profile
+DROP POLICY IF EXISTS "Users can view their own profile" ON profiles;
 CREATE POLICY "Users can view their own profile" ON profiles
   FOR SELECT USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert their own profile" ON profiles;
 CREATE POLICY "Users can insert their own profile" ON profiles
   FOR INSERT WITH CHECK (auth.uid() = user_id); 
 
+DROP POLICY IF EXISTS "Users can update their own profile" ON profiles;
 CREATE POLICY "Users can update their own profile" ON profiles
   FOR UPDATE USING (auth.uid() = user_id);  
 
+DROP POLICY IF EXISTS "Users can delete their own profile" ON profiles;
 CREATE POLICY "Users can delete their own profile" ON profiles
   FOR DELETE USING (auth.uid() = user_id);  
 
+
+-- Trigger: Auto-create profile when user signs up
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+  INSERT INTO public.profiles (user_id)
+  VALUES (new.id);
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_new_user();

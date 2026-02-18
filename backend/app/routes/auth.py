@@ -70,6 +70,13 @@ def register(payload: RegisterRequest):
             detail="Registration failed: no user returned",
         )
 
+    # Auto-create empty profile for new user
+    try:
+        supabase.table("profiles").insert({"user_id": user.id}).execute()
+    except Exception as exc:
+        # Log but don't fail registration if profile creation fails
+        print(f"Warning: Failed to create profile for user {user.id}: {exc}")
+
     return RegisterResponse(
         user=UserResponse(
             id=user.id,

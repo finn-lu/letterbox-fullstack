@@ -38,6 +38,7 @@ Required env variables in `backend/.env`:
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 - `FRONTEND_ORIGIN` (e.g. `http://localhost:3000`)
+- `TMDB_API_KEY` ([Get API key from TMDB](https://www.themoviedb.org/settings/api))
 
 Run API:
 ```bash
@@ -63,6 +64,24 @@ so browser-side CORS issues are minimized during local development.
 - `GET /auth/me` → returns current user from bearer token
 
 Frontend home page now includes a minimal Register/Login/Profile flow to learn end-to-end auth.
+
+## Movies Discovery API
+- `GET /movies?page=1` → fetch popular movies from TMDB
+- `GET /movies/search?q=...` → search movies by title
+- `POST /movies/ratings` → rate a movie (requires auth)
+- `GET /movies/ratings/me` → get current user's ratings (requires auth)
+
+**Setup:**
+1. Get a free TMDB API key at https://www.themoviedb.org/settings/api
+2. Add `TMDB_API_KEY=<your_key>` to `backend/.env`
+3. Run the SQL setup in `backend/supabase_setup.sql` in your Supabase SQL Editor to create tables
+4. Frontend: register/login, then click "Discover Movies" to start rating
+
+Frontend includes a swipe-style movie discovery component with:
+- Popular movie feed from TMDB
+- Quick-rating buttons (1, 3, 5, 7, 10 stars)
+- Persistent ratings via Supabase
+- Back/Skip navigation
 
 ## Baseline Commit Checklist
 - Ensure `backend/.env` is **not** tracked

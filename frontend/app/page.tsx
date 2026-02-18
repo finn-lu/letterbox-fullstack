@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import MoviesSwipe from "./components/movies-swipe";
 
 type User = {
   id: string;
@@ -18,6 +19,7 @@ export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [status, setStatus] = useState("Ready");
   const [isLoading, setIsLoading] = useState(false);
+  const [showMovies, setShowMovies] = useState(false);
 
   async function registerUser() {
     const normalizedEmail = email.trim().toLowerCase();
@@ -127,6 +129,23 @@ export default function Home() {
     setAccessToken("");
     setUser(null);
     setStatus("Local session cleared.");
+    setShowMovies(false);
+  }
+
+  if (showMovies && user) {
+    return (
+      <div>
+        <div className="fixed top-4 right-4 z-50">
+          <button
+            onClick={() => setShowMovies(false)}
+            className="rounded-md bg-red-600 px-3 py-1 text-sm text-white"
+          >
+            Back to Profile
+          </button>
+        </div>
+        <MoviesSwipe />
+      </div>
+    );
   }
 
   return (
@@ -196,11 +215,19 @@ export default function Home() {
         <p className="text-sm">Status: {status}</p>
 
         {user ? (
-          <div className="space-y-1 rounded-md border border-foreground/10 p-3 text-sm">
-            <p>User ID: {user.id}</p>
-            <p>Email: {user.email ?? "-"}</p>
-            <p>Confirmed: {user.email_confirmed_at ? "yes" : "no"}</p>
-          </div>
+          <>
+            <div className="space-y-1 rounded-md border border-foreground/10 p-3 text-sm">
+              <p>User ID: {user.id}</p>
+              <p>Email: {user.email ?? "-"}</p>
+              <p>Confirmed: {user.email_confirmed_at ? "yes" : "no"}</p>
+            </div>
+            <button
+              onClick={() => setShowMovies(true)}
+              className="w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white"
+            >
+              Discover Movies →
+            </button>
+          </>
         ) : null}
       </main>
     </div>

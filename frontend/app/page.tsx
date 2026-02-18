@@ -1,12 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import MoviesSwipe from "./components/movies-swipe";
+import ProfileDisplay from "./components/profile-display";
+import ProfileEditModal from "./components/profile-edit-modal";
 
 type User = {
   id: string;
   email?: string | null;
   email_confirmed_at?: string | null;
+};
+
+type Profile = {
+  id: string;
+  user_id: string;
+  display_name?: string;
+  birth_date?: string;
+  avatar_url?: string;
+  created_at: string;
+  updated_at: string;
 };
 
 const apiUrl = "/api";
@@ -17,9 +29,20 @@ export default function Home() {
   const [password, setPassword] = useState("");
   const [accessToken, setAccessToken] = useState("");
   const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [status, setStatus] = useState("Ready");
   const [isLoading, setIsLoading] = useState(false);
   const [showMovies, setShowMovies] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+
+  // Load profile from localStorage on mount
+  useEffect(() => {
+    const token = localStorage.getItem(tokenStorageKey);
+    if (token) {
+      setAccessToken(token);
+    }
+  }, []);
 
   async function registerUser() {
     const normalizedEmail = email.trim().toLowerCase();
@@ -47,6 +70,14 @@ export default function Home() {
           : "Registered successfully."
       );
       setUser(data.user ?? null);
+
+      // Auto-load profile after registration
+      if (data.access_token) {
+        const token = data.access_token as string;
+        setAccessToken(token);
+        localStorage.setItem(tokenStorageKey, token);
+        loadProfileWithToken(token);
+      }
     } catch (error) {
       setStatus(
         `Registration network error: ${String(error)}. Check frontend proxy and backend reachability.`
@@ -81,12 +112,34 @@ export default function Home() {
       localStorage.setItem(tokenStorageKey, token);
       setUser(data.user ?? null);
       setStatus("Login successful.");
+
+      // Auto-load profile after login
+      loadProfileWithToken(token);
     } catch (error) {
       setStatus(
         `Login network error: ${String(error)}. Check frontend proxy and backend reachability.`
       );
     } finally {
       setIsLoading(false);
+    }
+  }
+
+  async function loadProfileWithToken(token: string) {
+    try {
+      const response = await fetch(`${apiUrl}/profile/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        console.error("Failed to load profile");
+        return;
+      }
+
+      const profileData = await response.json();
+      setProfile(profileData);
+      setShowProfile(true);
+    } catch (error) {
+      console.error("Error loading profile:", error);
     }
   }
 
@@ -102,7 +155,7 @@ export default function Home() {
     setStatus("Loading profile...");
 
     try {
-      const response = await fetch(`${apiUrl}/auth/me`, {
+      const response = await fetch(`${apiUrl}/profile/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -113,8 +166,9 @@ export default function Home() {
         return;
       }
 
-      setUser(data);
+      setProfile(data);
       setStatus("Profile loaded.");
+      setShowProfile(true);
     } catch (error) {
       setStatus(
         `Profile network error: ${String(error)}. Check frontend proxy and backend reachability.`
@@ -128,8 +182,10 @@ export default function Home() {
     localStorage.removeItem(tokenStorageKey);
     setAccessToken("");
     setUser(null);
+    setProfile(null);
     setStatus("Local session cleared.");
     setShowMovies(false);
+    setShowProfile(false);
   }
 
   if (showMovies && user) {
@@ -144,6 +200,48 @@ export default function Home() {
           </button>
         </div>
         <MoviesSwipe />
+      </div>
+    );
+  }
+
+  // Show profile view when user is logged in and showProfile is true
+  if (showProfile && user && profile) {
+    return (
+      <div className="flex min-h-screen items-center justify-center px-6 py-10">
+        <main className="w-full max-w-md space-y-6">
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowProfile(false)}
+              className="rounded-md bg-slate-700 hover:bg-slate-600 px-3 py-2 text-sm text-white"
+            >
+              ← Back
+            </button>
+            <button
+              onClick={clearSession}
+              className="rounded-md bg-red-600 hover:bg-red-700 px-3 py-2 text-sm text-white"
+            >
+              Logout
+            </button>
+          </div>
+
+          <ProfileDisplay onEditClick={() => setShowEditModal(true)} />
+
+          <button
+            onClick={() => setShowMovies(true)}
+            className="w-full rounded-md bg-blue-600 hover:bg-blue-700 px-3 py-2 text-sm font-semibold text-white"
+          >
+            Discover Movies →
+          </button>
+
+          <ProfileEditModal
+            isOpen={showEditModal}
+            onClose={() => setShowEditModal(false)}
+            profile={profile}
+            onProfileUpdated={(updatedProfile) => {
+              setProfile(updatedProfile);
+            }}
+          />
+        </main>
       </div>
     );
   }
@@ -201,7 +299,7 @@ export default function Home() {
             onClick={loadProfile}
             disabled={isLoading}
           >
-            Load /auth/me
+            Load Profile
           </button>
           <button
             className="rounded-md border border-foreground/20 px-3 py-2 text-sm"
@@ -222,10 +320,10 @@ export default function Home() {
               <p>Confirmed: {user.email_confirmed_at ? "yes" : "no"}</p>
             </div>
             <button
-              onClick={() => setShowMovies(true)}
-              className="w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white"
+              onClick={() => setShowProfile(true)}
+              className="w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700"
             >
-              Discover Movies →
+              View Profile →
             </button>
           </>
         ) : null}

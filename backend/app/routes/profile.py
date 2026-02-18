@@ -31,16 +31,28 @@ def get_profile(authorization: str | None = Header(default=None)):
             supabase.table("profiles")
             .select("*")
             .eq("user_id", user.id)
-            .single()
             .execute()
         )
     except Exception as exc:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Profile not found: {exc}",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error: {exc}",
         )
 
-    profile_data = result.data
+    # If profile doesn't exist, create an empty one
+    if not result.data:
+        try:
+            create_result = supabase.table("profiles").insert(
+                {"user_id": user.id}
+            ).execute()
+            profile_data = create_result.data[0]
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to create profile: {exc}",
+            )
+    else:
+        profile_data = result.data[0]
 
     return ProfileResponse(
         id=profile_data["id"],

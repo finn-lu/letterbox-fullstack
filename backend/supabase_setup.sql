@@ -3,8 +3,9 @@
 -- Profile table (optional, for additional user info)
 CREATE TABLE IF NOT EXISTS profiles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
   display_name VARCHAR(255),
+  birth_date DATE,
   avatar_url TEXT,
   created_at TIMESTAMP DEFAULT now(),
   updated_at TIMESTAMP DEFAULT now()
@@ -33,12 +34,14 @@ CREATE TABLE IF NOT EXISTS watchlist (
 );
 
 -- Create indexes for faster queries
+CREATE INDEX IF NOT EXISTS idx_profiles_user_id ON profiles(user_id);
 CREATE INDEX IF NOT EXISTS idx_ratings_user_id ON ratings(user_id);
 CREATE INDEX IF NOT EXISTS idx_ratings_tmdb_id ON ratings(tmdb_id);
 CREATE INDEX IF NOT EXISTS idx_watchlist_user_id ON watchlist(user_id);
 CREATE INDEX IF NOT EXISTS idx_watchlist_tmdb_id ON watchlist(tmdb_id);
 
 -- Enable RLS (Row Level Security) for security
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ratings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE watchlist ENABLE ROW LEVEL SECURITY;
 
@@ -67,3 +70,17 @@ CREATE POLICY "Users can update their own watchlist" ON watchlist
 
 CREATE POLICY "Users can delete their own watchlist" ON watchlist
   FOR DELETE USING (auth.uid() = user_id);
+
+-- RLS Policy: Users can view their own profile
+CREATE POLICY "Users can view their own profile" ON profiles
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own profile" ON profiles
+  FOR INSERT WITH CHECK (auth.uid() = user_id); 
+
+CREATE POLICY "Users can update their own profile" ON profiles
+  FOR UPDATE USING (auth.uid() = user_id);  
+
+CREATE POLICY "Users can delete their own profile" ON profiles
+  FOR DELETE USING (auth.uid() = user_id);  
+

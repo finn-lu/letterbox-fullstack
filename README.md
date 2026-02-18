@@ -10,6 +10,7 @@ Fullstack reimagination of Letterboxd for movie and series discovery, rating, an
 - Search
 - Watchlists
 - Recommendation layer
+- Sign up questions (age, fav genre, real/sci fi, character vs spannung)
 
 ## Tech Stack
 - Frontend: Next.js (App Router), TypeScript, Tailwind CSS

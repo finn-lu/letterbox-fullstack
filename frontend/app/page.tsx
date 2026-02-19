@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import MoviesSwipe from "./components/movies-swipe";
 import ProfileDisplay from "./components/profile-display";
 import ProfileEditModal from "./components/profile-edit-modal";
+import { supabase } from "./lib/supabaseClient";
 
 type User = {
   id: string;
@@ -36,13 +37,71 @@ export default function Home() {
   const [showProfile, setShowProfile] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
 
-  // Load profile from localStorage on mount
+  function normalizeErrorDetail(detail: unknown): string {
+    if (typeof detail === "string") return detail;
+    if (detail && typeof detail === "object") {
+      try {
+        return JSON.stringify(detail);
+      } catch {
+        return "Unknown error";
+      }
+    }
+    return "Unknown error";
+  }
+
+  // Load profile from localStorage and Supabase session on mount
   useEffect(() => {
     const token = localStorage.getItem(tokenStorageKey);
     if (token) {
       setAccessToken(token);
     }
+
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (error) {
+        console.error("Supabase session error:", error.message);
+        return;
+      }
+
+      const session = data.session;
+      if (!session?.access_token) {
+        return;
+      }
+
+      const oauthToken = session.access_token;
+      setAccessToken(oauthToken);
+      localStorage.setItem(tokenStorageKey, oauthToken);
+      setUser({
+        id: session.user.id,
+        email: session.user.email ?? null,
+        email_confirmed_at: session.user.email_confirmed_at ?? null,
+      });
+      loadProfileWithToken(oauthToken);
+    });
   }, []);
+
+  async function signInWithGoogle() {
+    setStatus("Redirecting to Google...");
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: window.location.origin },
+    });
+
+    if (error) {
+      setStatus(`Google sign-in failed: ${error.message}`);
+    }
+  }
+
+  async function signInWithApple() {
+    setStatus("Redirecting to Apple...");
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "apple",
+      options: { redirectTo: window.location.origin },
+    });
+
+    if (error) {
+      setStatus(`Apple sign-in failed: ${error.message}`);
+    }
+  }
 
   async function registerUser() {
     const normalizedEmail = email.trim().toLowerCase();
@@ -131,7 +190,15 @@ export default function Home() {
       });
 
       if (!response.ok) {
-        console.error("Failed to load profile");
+        let errorDetail = "Failed to load profile";
+        try {
+          const errorBody = await response.json();
+          errorDetail = normalizeErrorDetail(errorBody.detail ?? errorBody);
+        } catch {
+          // Ignore JSON parsing errors
+        }
+        console.error("Failed to load profile:", errorDetail);
+        setStatus(`Profile not found: ${errorDetail}`);
         return;
       }
 
@@ -162,7 +229,7 @@ export default function Home() {
       const data = await response.json();
 
       if (!response.ok) {
-        setStatus(data.detail ?? "Failed to load profile");
+        setStatus(normalizeErrorDetail(data.detail ?? data ?? "Failed to load profile"));
         return;
       }
 
@@ -178,7 +245,8 @@ export default function Home() {
     }
   }
 
-  function clearSession() {
+  async function clearSession() {
+    await supabase.auth.signOut();
     localStorage.removeItem(tokenStorageKey);
     setAccessToken("");
     setUser(null);
@@ -293,6 +361,20 @@ export default function Home() {
             disabled={isLoading}
           >
             Login
+          </button>
+          <button
+            className="rounded-md border border-foreground/20 px-3 py-2 text-sm"
+            onClick={signInWithGoogle}
+            disabled={isLoading}
+          >
+            Sign in with Google
+          </button>
+          <button
+            className="rounded-md border border-foreground/20 px-3 py-2 text-sm"
+            onClick={signInWithApple}
+            disabled={isLoading}
+          >
+            Sign in with Apple
           </button>
           <button
             className="rounded-md border border-foreground/20 px-3 py-2 text-sm"

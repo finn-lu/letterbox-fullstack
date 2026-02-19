@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Header, HTTPException, status
-from app.database import supabase
+from app.database import supabase, supabase_admin
 from app.schemas.profile import ProfileResponse, UpdateProfileRequest
 from app.routes.auth import _extract_bearer_token
 
@@ -41,10 +41,18 @@ def get_profile(authorization: str | None = Header(default=None)):
 
     # If profile doesn't exist, create an empty one
     if not result.data:
+        if not supabase_admin:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Profile not found. Server is missing SUPABASE_SERVICE_ROLE_KEY to create one.",
+            )
+
         try:
-            create_result = supabase.table("profiles").insert(
-                {"user_id": user.id}
-            ).execute()
+            create_result = (
+                supabase_admin.table("profiles")
+                .upsert({"user_id": user.id}, on_conflict="user_id")
+                .execute()
+            )
             profile_data = create_result.data[0]
         except Exception as exc:
             raise HTTPException(
@@ -104,8 +112,9 @@ def update_profile(
         )
 
     try:
+        client = supabase_admin or supabase
         result = (
-            supabase.table("profiles")
+            client.table("profiles")
             .update(update_data)
             .eq("user_id", user.id)
             .execute()

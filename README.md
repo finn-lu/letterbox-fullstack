@@ -38,6 +38,7 @@ copy .env.example .env
 Required env variables in `backend/.env`:
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY` (optional but recommended for OAuth profile auto-creation)
 - `FRONTEND_ORIGIN` (e.g. `http://localhost:3000`)
 - `TMDB_API_KEY` ([Get API key from TMDB](https://www.themoviedb.org/settings/api))
 

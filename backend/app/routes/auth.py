@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Header, HTTPException, status
 
-from app.database import supabase
+from app.database import supabase, supabase_admin
 from app.schemas.auth import (
     AuthResponse,
     LoginRequest,
@@ -71,11 +71,18 @@ def register(payload: RegisterRequest):
         )
 
     # Auto-create empty profile for new user
-    try:
-        supabase.table("profiles").insert({"user_id": user.id}).execute()
-    except Exception as exc:
-        # Log but don't fail registration if profile creation fails
-        print(f"Warning: Failed to create profile for user {user.id}: {exc}")
+    if supabase_admin:
+        try:
+            supabase_admin.table("profiles").upsert(
+                {"user_id": user.id}, on_conflict="user_id"
+            ).execute()
+        except Exception as exc:
+            # Log but don't fail registration if profile creation fails
+            print(f"Warning: Failed to create profile for user {user.id}: {exc}")
+    else:
+        print(
+            "Warning: SUPABASE_SERVICE_ROLE_KEY missing; skipping server-side profile insert."
+        )
 
     return RegisterResponse(
         user=UserResponse(

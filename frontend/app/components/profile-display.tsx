@@ -41,7 +41,7 @@ export default function ProfileDisplay({
 
   if (isLoading) {
     return (
-      <div className="bg-slate-800 rounded-lg p-8 text-center">
+      <div className="bg-slate-900 rounded-2xl p-10 text-center border border-slate-800">
         <p className="text-slate-300">Loading profile...</p>
       </div>
     );
@@ -49,11 +49,11 @@ export default function ProfileDisplay({
 
   if (error) {
     return (
-      <div className="bg-red-900 rounded-lg p-8 text-center">
+      <div className="bg-red-950 rounded-2xl p-10 text-center border border-red-900">
         <p className="text-red-100">Error: {error}</p>
         <button
           onClick={onRetry}
-          className="mt-4 px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded transition"
+          className="mt-4 px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded-full transition"
         >
           Retry
         </button>
@@ -63,67 +63,64 @@ export default function ProfileDisplay({
 
   if (!profile) {
     return (
-      <div className="bg-slate-800 rounded-lg p-8 text-center">
+      <div className="bg-slate-900 rounded-2xl p-10 text-center border border-slate-800">
         <p className="text-slate-300">No profile data found.</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg p-8 max-w-md mx-auto">
-      <div className="flex justify-center mb-6">
+    <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 rounded-3xl p-8 border border-slate-800 shadow-xl shadow-black/30">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-xs uppercase tracking-[0.3em] text-emerald-400">
+            Profile
+          </p>
+          <h2 className="mt-3 text-3xl font-semibold text-slate-100">
+            {profile.display_name || "Unnamed User"}
+          </h2>
+          <p className="mt-2 text-sm text-slate-400">
+            Member since {formatDate(profile.created_at)}
+          </p>
+        </div>
+
         {profile.avatar_url ? (
           <img
             src={profile.avatar_url}
             alt="Avatar"
-            className="w-24 h-24 rounded-full object-cover border-4 border-blue-500"
+            className="w-20 h-20 rounded-2xl object-cover border border-slate-700"
           />
         ) : (
-          <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center border-4 border-blue-500">
-            <span className="text-white text-3xl font-bold">
+          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-400 to-amber-400 flex items-center justify-center">
+            <span className="text-slate-950 text-3xl font-bold">
               {profile.display_name?.[0]?.toUpperCase() || "?"}
             </span>
           </div>
         )}
       </div>
 
-      <div className="text-center">
-        <h2 className="text-2xl font-bold text-white mb-2">
-          {profile.display_name || "Unnamed User"}
-        </h2>
-
-        <div className="space-y-3 mt-6 text-left bg-slate-700 rounded p-4">
-          <div>
-            <p className="text-sm text-slate-400">Display Name</p>
-            <p className="text-white font-medium">
-              {profile.display_name || "Not set"}
-            </p>
-          </div>
-
-          <div>
-            <p className="text-sm text-slate-400">Birth Date</p>
-            <p className="text-white font-medium">
-              {formatDate(profile.birth_date)}
-            </p>
-          </div>
-
-          <div>
-            <p className="text-sm text-slate-400">Avatar URL</p>
-            <p className="text-white font-medium text-xs break-all">
-              {profile.avatar_url || "Not set"}
-            </p>
-          </div>
-
-          <div className="text-xs text-slate-500 pt-2 border-t border-slate-600">
-            <p>Created: {formatDate(profile.created_at)}</p>
-            <p>Updated: {formatDate(profile.updated_at)}</p>
-          </div>
+      <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <div className="rounded-2xl bg-slate-950/70 p-4">
+          <p className="text-xs text-slate-400">Display name</p>
+          <p className="mt-2 text-lg font-semibold text-slate-100">
+            {profile.display_name || "Not set"}
+          </p>
         </div>
+        <div className="rounded-2xl bg-slate-950/70 p-4">
+          <p className="text-xs text-slate-400">Birth date</p>
+          <p className="mt-2 text-lg font-semibold text-slate-100">
+            {formatDate(profile.birth_date)}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 text-xs text-slate-500">
+        Last updated {formatDate(profile.updated_at)}
       </div>
 
       <button
         onClick={onEditClick}
-        className="w-full mt-6 px-4 py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold rounded-lg transition duration-200"
+        className="w-full mt-6 px-4 py-3 rounded-full bg-emerald-400 text-slate-950 font-semibold hover:bg-emerald-300 transition"
       >
         Edit Profile
       </button>

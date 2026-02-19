@@ -1,12 +1,56 @@
 from fastapi import APIRouter, Header, HTTPException, status, Query
 from typing import Optional
+from datetime import datetime
 
-from app.database import supabase
+from app.database import supabase, supabase_admin
 from app.services.tmdb import TMDBClient, transform_movie_for_api
 from app.schemas.movies import MovieResponse, RatingRequest, RatingResponse, WatchlistRequest
 from app.routes.auth import _extract_bearer_token
 
 router = APIRouter(prefix="/movies", tags=["movies"])
+
+
+def _get_user_id_from_token(authorization: str | None) -> str:
+    token = _extract_bearer_token(authorization)
+
+    try:
+        auth_user = supabase.auth.get_user(token)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid token: {exc}",
+        )
+
+    user = getattr(auth_user, "user", None)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+
+    return user.id
+
+
+def _parse_datetime(value: str | None) -> datetime:
+    if not value:
+        return datetime.min
+    try:
+        if value.endswith("Z"):
+            value = value.replace("Z", "+00:00")
+        return datetime.fromisoformat(value)
+    except Exception:
+        return datetime.min
+
+
+def _fetch_movie_map(tmdb_ids: list[int]) -> dict[int, dict]:
+    movie_map: dict[int, dict] = {}
+    for tmdb_id in tmdb_ids:
+        try:
+            details = TMDBClient.get_movie_details(movie_id=tmdb_id)
+            movie_map[tmdb_id] = transform_movie_for_api(details)
+        except Exception:
+            continue
+    return movie_map
 
 
 @router.get("", response_model=dict)
@@ -188,3 +232,101 @@ def get_my_ratings(authorization: str | None = Header(default=None)):
     ]
 
     return {"ratings": ratings}
+
+
+@router.get("/profile/summary", response_model=dict)
+def get_profile_summary(authorization: str | None = Header(default=None)):
+    user_id = _get_user_id_from_token(authorization)
+    client = supabase_admin or supabase
+
+    try:
+        ratings_result = (
+            client.table("ratings").select("*").eq("user_id", user_id).execute()
+        )
+        watchlist_result = (
+            client.table("watchlist").select("*").eq("user_id", user_id).execute()
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch profile summary: {exc}",
+        )
+
+    ratings = ratings_result.data or []
+    watchlist = watchlist_result.data or []
+
+    ratings_recent = sorted(
+        ratings,
+        key=lambda rating: _parse_datetime(rating.get("created_at")),
+        reverse=True,
+    )
+    ratings_top = sorted(
+        ratings,
+        key=lambda rating: (
+            rating.get("rating") or 0,
+            _parse_datetime(rating.get("created_at")),
+        ),
+        reverse=True,
+    )
+
+    recent_items = ratings_recent[:10]
+    top_items = ratings_top[:10]
+
+    tmdb_ids = list(
+        {
+            item.get("tmdb_id")
+            for item in (recent_items + top_items)
+            if item.get("tmdb_id")
+        }
+    )
+    movie_map = _fetch_movie_map(tmdb_ids)
+
+    def map_rating_item(item: dict) -> dict:
+        tmdb_id = item.get("tmdb_id")
+        return {
+            "tmdb_id": tmdb_id,
+            "rating": item.get("rating"),
+            "created_at": item.get("created_at", ""),
+            "movie": movie_map.get(tmdb_id),
+        }
+
+    ratings_count = len(ratings)
+    average_rating = (
+        round(sum(r.get("rating") or 0 for r in ratings) / ratings_count, 2)
+        if ratings_count
+        else 0.0
+    )
+
+    status_labels = {
+        "to_watch": "To watch",
+        "watching": "Watching",
+        "completed": "Completed",
+        "on_hold": "On hold",
+        "dropped": "Dropped",
+    }
+    status_counts: dict[str, int] = {key: 0 for key in status_labels}
+    for entry in watchlist:
+        status_value = entry.get("status") or "to_watch"
+        if status_value not in status_counts:
+            status_counts[status_value] = 0
+        status_counts[status_value] += 1
+
+    watchlist_summary = [
+        {
+            "status": status,
+            "label": status_labels.get(status, status.replace("_", " ").title()),
+            "count": count,
+        }
+        for status, count in status_counts.items()
+    ]
+
+    return {
+        "recent": [map_rating_item(item) for item in recent_items],
+        "top_rated": [map_rating_item(item) for item in top_items],
+        "stats": {
+            "ratings_count": ratings_count,
+            "average_rating": average_rating,
+            "watchlist_count": len(watchlist),
+        },
+        "watchlist_summary": watchlist_summary,
+    }

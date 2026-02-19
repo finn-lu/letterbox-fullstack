@@ -8,6 +8,18 @@ type SessionUser = {
   avatar_url?: string | null;
 };
 
+type MovieItem = {
+  tmdb_id: number;
+  title: string;
+  poster_path?: string | null;
+};
+
+type ShelfData = {
+  id: string;
+  label: string;
+  movies: MovieItem[];
+};
+
 const highlights = [
   {
     title: "Cinematic discovery",
@@ -23,101 +35,18 @@ const highlights = [
   },
 ];
 
-const shelves = [
-  {
-    id: "now-showing",
-    label: "Now showing",
-    movies: [
-      {
-        title: "Dune: Part Two",
-        poster: "https://image.tmdb.org/t/p/w500/8b8R8l88Qje9dn9OE8PY05Nxl1X.jpg",
-      },
-      {
-        title: "Poor Things",
-        poster: "https://image.tmdb.org/t/p/w500/kCGlIMHnOm8JPXq3rXM6c5wMxcT.jpg",
-      },
-      {
-        title: "The Batman",
-        poster: "https://image.tmdb.org/t/p/w500/74xTEgt7R36Fpooo50r9T25onhq.jpg",
-      },
-      {
-        title: "Oppenheimer",
-        poster: "https://image.tmdb.org/t/p/w500/ptpr0kGAckfQkJeJIt8st5dglvd.jpg",
-      },
-      {
-        title: "Anatomy of a Fall",
-        poster: "https://image.tmdb.org/t/p/w500/4HodYYKEIsGOdinkGi2Ucz6X9i0.jpg",
-      },
-      {
-        title: "Civil War",
-        poster: "https://image.tmdb.org/t/p/w500/6Rh0Q8L3st4iSMwK7ndFY8jZ7dU.jpg",
-      },
-    ],
-  },
-  {
-    id: "critics",
-    label: "Critics picks",
-    movies: [
-      {
-        title: "Past Lives",
-        poster: "https://image.tmdb.org/t/p/w500/k3waqVXSnvCZWfJYNtdamTgTtTA.jpg",
-      },
-      {
-        title: "Killers of the Flower Moon",
-        poster: "https://image.tmdb.org/t/p/w500/dB6Krk806zeqd0YNp2ngQ9zXteH.jpg",
-      },
-      {
-        title: "Fallen Leaves",
-        poster: "https://image.tmdb.org/t/p/w500/pwSpjQO1EGwZ8gZl1tSQGevxV0a.jpg",
-      },
-      {
-        title: "The Holdovers",
-        poster: "https://image.tmdb.org/t/p/w500/VHSzNBTwxV8qh8u9srj7zA17kv.jpg",
-      },
-      {
-        title: "The Iron Claw",
-        poster: "https://image.tmdb.org/t/p/w500/iKqHv5ruD3Noym8e4eo2QeUAGmR.jpg",
-      },
-      {
-        title: "Zone of Interest",
-        poster: "https://image.tmdb.org/t/p/w500/hUu9zyZm0Nk2cRm7O6cK7tG5xkO.jpg",
-      },
-    ],
-  },
-  {
-    id: "hidden-gems",
-    label: "Hidden gems",
-    movies: [
-      {
-        title: "Aftersun",
-        poster: "https://image.tmdb.org/t/p/w500/evKztU1pihfFk3XVZ3oN6ryFp67.jpg",
-      },
-      {
-        title: "Perfect Days",
-        poster: "https://image.tmdb.org/t/p/w500/l0Y9Dk9aCVlZr2K6mPMgh9H0B2O.jpg",
-      },
-      {
-        title: "All of Us Strangers",
-        poster: "https://image.tmdb.org/t/p/w500/oF0a5D9W8kQbE3C94EGSgR9pWW6.jpg",
-      },
-      {
-        title: "Bottoms",
-        poster: "https://image.tmdb.org/t/p/w500/7TNoDC5mB8QMvW9j6iPV6oVwXlJ.jpg",
-      },
-      {
-        title: "The Taste of Things",
-        poster: "https://image.tmdb.org/t/p/w500/5yGEA2L9feQloWcYQ2lbNQkKxAO.jpg",
-      },
-      {
-        title: "The Beast",
-        poster: "https://image.tmdb.org/t/p/w500/v5hq7BSq65a6j5E2X7mQe2m7YEC.jpg",
-      },
-    ],
-  },
+const shelfConfig = [
+  { id: "now-showing", label: "Now showing", page: 1 },
+  { id: "critics", label: "Critics picks", page: 2 },
+  { id: "hidden-gems", label: "Hidden gems", page: 3 },
 ];
+
+const posterBaseUrl = "https://image.tmdb.org/t/p/w500";
 
 export default function Home() {
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
+  const [shelves, setShelves] = useState<ShelfData[]>([]);
+  const [shelfError, setShelfError] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -128,6 +57,51 @@ export default function Home() {
         avatar_url: (session.user.user_metadata?.avatar_url as string) ?? null,
       });
     });
+  }, []);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadShelves() {
+      setShelfError(null);
+
+      try {
+        const responses = await Promise.all(
+          shelfConfig.map((shelf) =>
+            fetch(`/api/movies?page=${shelf.page}`).then(async (response) => {
+              const data = await response.json();
+              if (!response.ok) {
+                throw new Error(data.detail || data.error || "Failed to load movies");
+              }
+              return { shelf, data };
+            })
+          )
+        );
+
+        if (!isActive) return;
+
+        const nextShelves = responses.map(({ shelf, data }) => ({
+          id: shelf.id,
+          label: shelf.label,
+          movies: (data.movies ?? []).map((movie: MovieItem) => ({
+            tmdb_id: movie.tmdb_id,
+            title: movie.title,
+            poster_path: movie.poster_path ?? null,
+          })),
+        }));
+
+        setShelves(nextShelves);
+      } catch (err) {
+        if (!isActive) return;
+        setShelfError(String(err));
+      }
+    }
+
+    loadShelves();
+
+    return () => {
+      isActive = false;
+    };
   }, []);
 
   const fallbackInitial = sessionUser?.email?.[0]?.toUpperCase() ?? "?";
@@ -232,6 +206,11 @@ export default function Home() {
         </section>
 
         <section className="mx-auto w-full max-w-6xl space-y-12 px-6 pb-24">
+          {shelfError ? (
+            <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 p-4 text-sm text-rose-200">
+              {shelfError}
+            </div>
+          ) : null}
           {shelves.map((shelf) => (
             <div key={shelf.id} id={shelf.id} className="space-y-4">
               <div className="flex items-center justify-between">
@@ -243,15 +222,21 @@ export default function Home() {
               <div className="no-scrollbar flex gap-5 overflow-x-auto pb-2">
                 {shelf.movies.map((movie) => (
                   <div
-                    key={movie.title}
+                    key={`${shelf.id}-${movie.tmdb_id}`}
                     className="group relative min-w-[180px] rounded-2xl border border-slate-800 bg-slate-900/70 p-3 shadow-lg shadow-black/30 transition hover:-translate-y-2"
                   >
                     <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-amber-500/10 to-rose-500/10 opacity-0 transition group-hover:opacity-100" />
-                    <img
-                      src={movie.poster}
-                      alt={movie.title}
-                      className="relative z-10 h-60 w-full rounded-xl object-cover"
-                    />
+                    {movie.poster_path ? (
+                      <img
+                        src={`${posterBaseUrl}${movie.poster_path}`}
+                        alt={movie.title}
+                        className="relative z-10 h-60 w-full rounded-xl object-cover"
+                      />
+                    ) : (
+                      <div className="relative z-10 flex h-60 w-full items-center justify-center rounded-xl bg-slate-900/60 px-3 text-center text-xs text-slate-400">
+                        {movie.title}
+                      </div>
+                    )}
                     <div className="relative z-10 mt-3">
                       <p className="text-sm font-semibold text-slate-100">{movie.title}</p>
                       <p className="text-xs text-slate-400">Curated pick</p>

@@ -1,7 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react";
-
 type Profile = {
   id: string;
   user_id: string;
@@ -13,56 +11,20 @@ type Profile = {
 };
 
 type ProfileDisplayProps = {
+  profile: Profile | null;
+  isLoading: boolean;
+  error: string | null;
+  onRetry: () => void;
   onEditClick: () => void;
 };
 
-const tokenStorageKey = "letterbox_access_token";
-
-export default function ProfileDisplay({ onEditClick }: ProfileDisplayProps) {
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    loadProfile();
-  }, []);
-
-  async function loadProfile() {
-    setIsLoading(true);
-    setError(null);
-
-    const token = localStorage.getItem(tokenStorageKey);
-    if (!token) {
-      setError("No access token found. Please log in.");
-      setIsLoading(false);
-      return;
-    }
-
-    try {
-      const response = await fetch("/api/profile/me", {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        setError(errorData.detail || "Failed to load profile");
-        setIsLoading(false);
-        return;
-      }
-
-      const data = await response.json();
-      setProfile(data);
-    } catch (err) {
-      setError(`Error loading profile: ${String(err)}`);
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
+export default function ProfileDisplay({
+  profile,
+  isLoading,
+  error,
+  onRetry,
+  onEditClick,
+}: ProfileDisplayProps) {
   function formatDate(dateString?: string): string {
     if (!dateString) return "Not set";
     try {
@@ -90,7 +52,7 @@ export default function ProfileDisplay({ onEditClick }: ProfileDisplayProps) {
       <div className="bg-red-900 rounded-lg p-8 text-center">
         <p className="text-red-100">Error: {error}</p>
         <button
-          onClick={loadProfile}
+          onClick={onRetry}
           className="mt-4 px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded transition"
         >
           Retry
@@ -109,7 +71,6 @@ export default function ProfileDisplay({ onEditClick }: ProfileDisplayProps) {
 
   return (
     <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg p-8 max-w-md mx-auto">
-      {/* Avatar */}
       <div className="flex justify-center mb-6">
         {profile.avatar_url ? (
           <img
@@ -126,7 +87,6 @@ export default function ProfileDisplay({ onEditClick }: ProfileDisplayProps) {
         )}
       </div>
 
-      {/* Profile Info */}
       <div className="text-center">
         <h2 className="text-2xl font-bold text-white mb-2">
           {profile.display_name || "Unnamed User"}
@@ -161,7 +121,6 @@ export default function ProfileDisplay({ onEditClick }: ProfileDisplayProps) {
         </div>
       </div>
 
-      {/* Edit Button */}
       <button
         onClick={onEditClick}
         className="w-full mt-6 px-4 py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold rounded-lg transition duration-200"
@@ -170,4 +129,4 @@ export default function ProfileDisplay({ onEditClick }: ProfileDisplayProps) {
       </button>
     </div>
   );
-}  
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import CameraRating from "./camera-rating";
 
 type Movie = {
   id: number;
@@ -183,25 +184,20 @@ export default function MoviesSwipe() {
             {movie.overview && (
               <p className="text-sm text-foreground/80 line-clamp-3">{movie.overview}</p>
             )}
-            {currentRating && (
+            {typeof currentRating === "number" && (
               <p className="text-sm bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 rounded px-2 py-1 w-fit">
-                You rated: {currentRating}/10
+                You rated: {currentRating.toFixed(1)}/10
               </p>
             )}
           </div>
         </div>
 
-        {/* Rating Buttons */}
-        <div className="grid grid-cols-5 gap-2">
-          {[1, 3, 5, 7, 10].map((rating) => (
-            <button
-              key={rating}
-              onClick={() => rateMovie(rating)}
-              className="rounded-md border border-foreground/20 py-2 text-sm font-semibold hover:bg-foreground/10"
-            >
-              {rating}
-            </button>
-          ))}
+        {/* Camera Rating */}
+        <div className="flex justify-center">
+          <CameraRating
+            value={currentRating}
+            onChange={(rating) => rateMovie(rating)}
+          />
         </div>
 
         {/* Navigation */}

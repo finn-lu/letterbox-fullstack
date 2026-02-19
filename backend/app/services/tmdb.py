@@ -65,6 +65,44 @@ class TMDBClient:
             raise RuntimeError(f"TMDB API error: {exc}")
 
     @staticmethod
+    def get_movie_details_with_videos(movie_id: int, language: str = "en-US") -> dict:
+        """Fetch movie details with appended videos."""
+        if not TMDB_API_KEY:
+            raise ValueError("TMDB_API_KEY not configured in environment")
+
+        url = f"{TMDB_BASE_URL}/movie/{movie_id}"
+        params = {
+            "api_key": TMDB_API_KEY,
+            "language": language,
+            "append_to_response": "videos",
+        }
+
+        try:
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException as exc:
+            raise RuntimeError(f"TMDB API error: {exc}")
+
+    @staticmethod
+    def get_watch_providers(movie_id: int) -> dict:
+        """Fetch watch providers for a movie."""
+        if not TMDB_API_KEY:
+            raise ValueError("TMDB_API_KEY not configured in environment")
+
+        url = f"{TMDB_BASE_URL}/movie/{movie_id}/watch/providers"
+        params = {
+            "api_key": TMDB_API_KEY,
+        }
+
+        try:
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException as exc:
+            raise RuntimeError(f"TMDB API error: {exc}")
+
+    @staticmethod
     def search_movies(query: str, language: str = "en-US", page: int = 1) -> dict:
         """Search for movies by title.
         

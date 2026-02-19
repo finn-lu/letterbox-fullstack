@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "./lib/supabaseClient";
+import MovieDrawer from "./components/movie-drawer";
 
 type SessionUser = {
   email?: string | null;
@@ -47,6 +48,8 @@ export default function Home() {
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
   const [shelves, setShelves] = useState<ShelfData[]>([]);
   const [shelfError, setShelfError] = useState<string | null>(null);
+  const [selectedMovieId, setSelectedMovieId] = useState<number | null>(null);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -105,6 +108,15 @@ export default function Home() {
   }, []);
 
   const fallbackInitial = sessionUser?.email?.[0]?.toUpperCase() ?? "?";
+
+  function openMovie(tmdbId: number) {
+    setSelectedMovieId(tmdbId);
+    setIsDrawerOpen(true);
+  }
+
+  function closeMovie() {
+    setIsDrawerOpen(false);
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -224,6 +236,15 @@ export default function Home() {
                   <div
                     key={`${shelf.id}-${movie.tmdb_id}`}
                     className="group relative min-w-[180px] rounded-2xl border border-slate-800 bg-slate-900/70 p-3 shadow-lg shadow-black/30 transition hover:-translate-y-2"
+                    onClick={() => openMovie(movie.tmdb_id)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        openMovie(movie.tmdb_id);
+                      }
+                    }}
                   >
                     <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-amber-500/10 to-rose-500/10 opacity-0 transition group-hover:opacity-100" />
                     {movie.poster_path ? (
@@ -248,31 +269,33 @@ export default function Home() {
           ))}
         </section>
 
-        <section className="mx-auto w-full max-w-6xl px-6 pb-24">
-          <div className="grid gap-8 rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 to-slate-950 p-10 md:grid-cols-2">
-            <div className="space-y-4">
-              <h2 className="text-3xl font-semibold">Ready to build your film identity?</h2>
-              <p className="text-slate-400">
-                Create your profile, rate films, and shape a recommendation feed that feels
-                handcrafted. Your next favorite is one scroll away.
-              </p>
+        {!sessionUser ? (
+          <section className="mx-auto w-full max-w-6xl px-6 pb-24">
+            <div className="grid gap-8 rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 to-slate-950 p-10 md:grid-cols-2">
+              <div className="space-y-4">
+                <h2 className="text-3xl font-semibold">Ready to build your film identity?</h2>
+                <p className="text-slate-400">
+                  Create your profile, rate films, and shape a recommendation feed that feels
+                  handcrafted. Your next favorite is one scroll away.
+                </p>
+              </div>
+              <div className="flex items-center gap-4">
+                <a
+                  href="/login"
+                  className="rounded-full bg-amber-500 px-6 py-3 text-sm font-semibold text-slate-950 hover:bg-amber-400"
+                >
+                  Join now
+                </a>
+                <a
+                  href="#now-showing"
+                  className="rounded-full border border-slate-700 px-6 py-3 text-sm text-slate-100"
+                >
+                  Browse picks
+                </a>
+              </div>
             </div>
-            <div className="flex items-center gap-4">
-              <a
-                href="/login"
-                className="rounded-full bg-amber-500 px-6 py-3 text-sm font-semibold text-slate-950 hover:bg-amber-400"
-              >
-                Join now
-              </a>
-              <a
-                href="#now-showing"
-                className="rounded-full border border-slate-700 px-6 py-3 text-sm text-slate-100"
-              >
-                Browse picks
-              </a>
-            </div>
-          </div>
-        </section>
+          </section>
+        ) : null}
       </main>
 
       <footer className="relative z-10 border-t border-slate-900">
@@ -284,6 +307,12 @@ export default function Home() {
           </div>
         </div>
       </footer>
+
+      <MovieDrawer
+        tmdbId={selectedMovieId}
+        isOpen={isDrawerOpen}
+        onClose={closeMovie}
+      />
     </div>
   );
 }

@@ -53,6 +53,51 @@ def _fetch_movie_map(tmdb_ids: list[int]) -> dict[int, dict]:
     return movie_map
 
 
+def _pick_trailer(videos: list[dict]) -> dict | None:
+    for video in videos:
+        if video.get("site") == "YouTube" and video.get("type") == "Trailer":
+            return {
+                "key": video.get("key"),
+                "name": video.get("name"),
+                "site": video.get("site"),
+                "type": video.get("type"),
+            }
+    for video in videos:
+        if video.get("site") == "YouTube":
+            return {
+                "key": video.get("key"),
+                "name": video.get("name"),
+                "site": video.get("site"),
+                "type": video.get("type"),
+            }
+    return None
+
+
+def _format_providers(provider_data: dict, region: str) -> dict:
+    results = provider_data.get("results", {})
+    region_data = results.get(region, {})
+
+    def format_list(entries: list[dict] | None) -> list[dict]:
+        if not entries:
+            return []
+        return [
+            {
+                "provider_id": entry.get("provider_id"),
+                "provider_name": entry.get("provider_name"),
+                "logo_path": entry.get("logo_path"),
+            }
+            for entry in entries
+        ]
+
+    return {
+        "region": region,
+        "link": region_data.get("link"),
+        "subscription": format_list(region_data.get("flatrate")),
+        "rent": format_list(region_data.get("rent")),
+        "buy": format_list(region_data.get("buy")),
+    }
+
+
 @router.get("", response_model=dict)
 def get_popular_movies(page: int = Query(1, ge=1)):
     """Fetch popular movies from TMDB.
@@ -110,6 +155,70 @@ def search_movies(q: str = Query(..., min_length=1), page: int = Query(1, ge=1))
     }
 
 
+@router.get("/{movie_id}/details", response_model=dict)
+def get_movie_details(
+    movie_id: int,
+    region: str = Query("US", min_length=2, max_length=2),
+    authorization: str | None = Header(default=None),
+):
+    try:
+        details = TMDBClient.get_movie_details_with_videos(movie_id=movie_id)
+        providers = TMDBClient.get_watch_providers(movie_id=movie_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to fetch movie details: {exc}",
+        )
+
+    movie = transform_movie_for_api(details)
+    videos = details.get("videos", {}).get("results", [])
+    trailer = _pick_trailer(videos)
+
+    personal_lists = {
+        "rated": False,
+        "rating": None,
+        "watchlist_status": None,
+    }
+
+    if authorization:
+        try:
+            user_id = _get_user_id_from_token(authorization)
+            client = supabase_admin or supabase
+
+            rating_result = (
+                client.table("ratings")
+                .select("rating")
+                .eq("user_id", user_id)
+                .eq("tmdb_id", movie_id)
+                .limit(1)
+                .execute()
+            )
+            watchlist_result = (
+                client.table("watchlist")
+                .select("status")
+                .eq("user_id", user_id)
+                .eq("tmdb_id", movie_id)
+                .limit(1)
+                .execute()
+            )
+
+            if rating_result.data:
+                personal_lists["rated"] = True
+                personal_lists["rating"] = rating_result.data[0].get("rating")
+
+            if watchlist_result.data:
+                personal_lists["watchlist_status"] = watchlist_result.data[0].get("status")
+        except Exception:
+            pass
+
+    return {
+        "movie": movie,
+        "trailer": trailer,
+        "providers": _format_providers(providers, region.upper()),
+        "personal_lists": personal_lists,
+    }
+
+
 @router.post("/ratings", response_model=RatingResponse, status_code=status.HTTP_201_CREATED)
 def create_rating(
     payload: RatingRequest,
@@ -143,24 +252,27 @@ def create_rating(
 
     user_id = user.id
 
+    client = supabase_admin or supabase
+
     # Check if rating already exists
     try:
-        existing = supabase.table("ratings").select("id").eq("user_id", user_id).eq(
+        existing = client.table("ratings").select("id").eq("user_id", user_id).eq(
             "tmdb_id", payload.tmdb_id
         ).execute()
 
         if existing.data:
             # Update existing
             rating_id = existing.data[0]["id"]
-            result = supabase.table("ratings").update(
+            result = client.table("ratings").update(
                 {
                     "rating": payload.rating,
                     "review": payload.review,
+                    "updated_at": datetime.utcnow().isoformat(),
                 }
             ).eq("id", rating_id).execute()
         else:
             # Create new
-            result = supabase.table("ratings").insert(
+            result = client.table("ratings").insert(
                 {
                     "user_id": user_id,
                     "tmdb_id": payload.tmdb_id,
@@ -234,6 +346,45 @@ def get_my_ratings(authorization: str | None = Header(default=None)):
     return {"ratings": ratings}
 
 
+@router.get("/ratings/me/details", response_model=dict)
+def get_my_ratings_details(authorization: str | None = Header(default=None)):
+    user_id = _get_user_id_from_token(authorization)
+    client = supabase_admin or supabase
+
+    try:
+        result = client.table("ratings").select("*").eq("user_id", user_id).execute()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch ratings: {exc}",
+        )
+
+    ratings = result.data or []
+    tmdb_ids = list({rating.get("tmdb_id") for rating in ratings if rating.get("tmdb_id")})
+    movie_map = _fetch_movie_map(tmdb_ids)
+
+    sorted_ratings = sorted(
+        ratings,
+        key=lambda rating: _parse_datetime(
+            rating.get("updated_at") or rating.get("created_at")
+        ),
+        reverse=True,
+    )
+
+    return {
+        "ratings": [
+            {
+                "tmdb_id": rating.get("tmdb_id"),
+                "rating": rating.get("rating"),
+                "created_at": rating.get("created_at", ""),
+                "updated_at": rating.get("updated_at", ""),
+                "movie": movie_map.get(rating.get("tmdb_id")),
+            }
+            for rating in sorted_ratings
+        ]
+    }
+
+
 @router.get("/profile/summary", response_model=dict)
 def get_profile_summary(authorization: str | None = Header(default=None)):
     user_id = _get_user_id_from_token(authorization)
@@ -257,14 +408,16 @@ def get_profile_summary(authorization: str | None = Header(default=None)):
 
     ratings_recent = sorted(
         ratings,
-        key=lambda rating: _parse_datetime(rating.get("created_at")),
+        key=lambda rating: _parse_datetime(
+            rating.get("updated_at") or rating.get("created_at")
+        ),
         reverse=True,
     )
     ratings_top = sorted(
         ratings,
         key=lambda rating: (
             rating.get("rating") or 0,
-            _parse_datetime(rating.get("created_at")),
+            _parse_datetime(rating.get("updated_at") or rating.get("created_at")),
         ),
         reverse=True,
     )
@@ -287,6 +440,7 @@ def get_profile_summary(authorization: str | None = Header(default=None)):
             "tmdb_id": tmdb_id,
             "rating": item.get("rating"),
             "created_at": item.get("created_at", ""),
+            "updated_at": item.get("updated_at", ""),
             "movie": movie_map.get(tmdb_id),
         }
 

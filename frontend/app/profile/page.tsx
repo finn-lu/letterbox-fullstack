@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import ProfileDisplay from "../components/profile-display";
 import ProfileEditModal from "../components/profile-edit-modal";
+import MovieDrawer from "../components/movie-drawer";
 import { supabase } from "../lib/supabaseClient";
 
 type Profile = {
@@ -20,6 +21,7 @@ type MovieSummary = {
   tmdb_id: number;
   rating?: number;
   created_at?: string;
+  updated_at?: string;
   movie?: {
     title?: string;
     poster_path?: string;
@@ -39,6 +41,17 @@ type ProfileSummary = {
     label: string;
     count: number;
   }[];
+};
+
+type RatedItem = {
+  tmdb_id: number;
+  rating?: number;
+  created_at?: string;
+  updated_at?: string;
+  movie?: {
+    title?: string;
+    poster_path?: string;
+  };
 };
 
 const apiUrl = "/api";
@@ -88,10 +101,15 @@ export default function ProfilePage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [summary, setSummary] = useState<ProfileSummary | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [ratedItems, setRatedItems] = useState<RatedItem[]>([]);
+  const [ratedError, setRatedError] = useState<string | null>(null);
+  const [selectedMovieId, setSelectedMovieId] = useState<number | null>(null);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   useEffect(() => {
     loadProfile();
     loadSummary();
+    loadRated();
   }, []);
 
   async function loadProfile() {
@@ -136,6 +154,7 @@ export default function ProfilePage() {
 
     try {
       const response = await fetch(`${apiUrl}/movies/profile/summary`, {
+        cache: "no-store",
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -149,6 +168,34 @@ export default function ProfilePage() {
       setSummary(data);
     } catch (err) {
       setSummaryError(`Error loading stats: ${String(err)}`);
+    }
+  }
+
+  async function loadRated() {
+    setRatedError(null);
+
+    const token = localStorage.getItem(tokenStorageKey);
+    if (!token) {
+      setRatedError("No access token found. Please log in.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${apiUrl}/movies/ratings/me/details`, {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setRatedError(data.detail || data.error || "Failed to load rated list");
+        return;
+      }
+
+      setRatedItems(data.ratings ?? []);
+    } catch (err) {
+      setRatedError(`Error loading rated list: ${String(err)}`);
     }
   }
 
@@ -166,6 +213,13 @@ export default function ProfilePage() {
     ? summary.stats.average_rating.toFixed(1)
     : "0.0";
   const watchlistCount = summary?.stats?.watchlist_count ?? 0;
+
+  const ratedList = ratedItems.slice(0, 12);
+
+  function openMovie(tmdbId: number) {
+    setSelectedMovieId(tmdbId);
+    setIsDrawerOpen(true);
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -272,7 +326,16 @@ export default function ProfilePage() {
                 return (
                   <div
                     key={`${item.tmdb_id}-${item.created_at}`}
-                    className="group min-w-[180px] rounded-2xl border border-slate-800 bg-slate-900/70 p-3 shadow-lg shadow-black/30 transition hover:-translate-y-2 hover:border-slate-600"
+                    className="group min-w-[180px] cursor-pointer rounded-2xl border border-slate-800 bg-slate-900/70 p-3 shadow-lg shadow-black/30 transition hover:-translate-y-2 hover:border-slate-600"
+                    onClick={() => openMovie(item.tmdb_id)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        openMovie(item.tmdb_id);
+                      }
+                    }}
                   >
                     <div className="relative">
                       {posterUrl ? (
@@ -290,6 +353,76 @@ export default function ProfilePage() {
                     </div>
                     <p className="mt-3 text-sm font-semibold text-slate-100">{title}</p>
                     <p className="text-xs text-slate-400">{ratingLabel}</p>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </section>
+
+        <section className="mt-12 space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-2xl font-semibold">Rated</h2>
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                Latest
+              </p>
+            </div>
+            <button className="rounded-full border border-slate-800 px-4 py-1 text-xs text-slate-300 hover:border-slate-600">
+              See all
+            </button>
+          </div>
+          {ratedError ? (
+            <p className="text-xs text-rose-400">{ratedError}</p>
+          ) : null}
+          <div className="no-scrollbar flex gap-5 overflow-x-auto pb-2">
+            {ratedList.length === 0 ? (
+              <div className="min-w-[240px] rounded-2xl border border-dashed border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-400">
+                Rate a movie to see your rated list here.
+              </div>
+            ) : (
+              ratedList.map((item) => {
+                const title = item.movie?.title ?? "Untitled";
+                const posterPath = item.movie?.poster_path;
+                const posterUrl = posterPath ? `${posterBaseUrl}${posterPath}` : null;
+                const score =
+                  typeof item.rating === "number" ? item.rating.toFixed(1) : "-";
+
+                return (
+                  <div
+                    key={`${item.tmdb_id}-${item.updated_at ?? item.created_at}`}
+                    className="group min-w-[180px] cursor-pointer rounded-2xl border border-slate-800 bg-slate-900/70 p-3 shadow-lg shadow-black/30 transition hover:-translate-y-2 hover:border-amber-400/60"
+                    onClick={() => openMovie(item.tmdb_id)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        openMovie(item.tmdb_id);
+                      }
+                    }}
+                  >
+                    <div className="relative">
+                      {posterUrl ? (
+                        <img
+                          src={posterUrl}
+                          alt={title}
+                          className="h-56 w-full rounded-xl object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-56 w-full items-center justify-center rounded-xl bg-slate-950/80 px-3 text-center text-xs text-slate-400">
+                          {title}
+                        </div>
+                      )}
+                      <span className="absolute right-3 top-3 rounded-full bg-amber-400 px-2 py-0.5 text-xs font-semibold text-slate-950">
+                        {score}
+                      </span>
+                      <div className="absolute inset-0 rounded-xl bg-gradient-to-t from-slate-950/80 via-transparent to-transparent opacity-0 transition group-hover:opacity-100" />
+                    </div>
+                    <p className="mt-3 text-sm font-semibold text-slate-100">{title}</p>
+                    <p className="text-xs text-slate-400">
+                      {item.updated_at ? "Updated rating" : "Your rating"}
+                    </p>
                   </div>
                 );
               })
@@ -327,7 +460,16 @@ export default function ProfilePage() {
                 return (
                   <div
                     key={`${item.tmdb_id}-${item.created_at}`}
-                    className="group min-w-[180px] rounded-2xl border border-slate-800 bg-slate-900/70 p-3 shadow-lg shadow-black/30 transition hover:-translate-y-2 hover:border-emerald-400/60"
+                    className="group min-w-[180px] cursor-pointer rounded-2xl border border-slate-800 bg-slate-900/70 p-3 shadow-lg shadow-black/30 transition hover:-translate-y-2 hover:border-emerald-400/60"
+                    onClick={() => openMovie(item.tmdb_id)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        openMovie(item.tmdb_id);
+                      }
+                    }}
                   >
                     <div className="relative">
                       {posterUrl ? (
@@ -405,6 +547,16 @@ export default function ProfilePage() {
           profile={profile}
           onProfileUpdated={(updatedProfile) => {
             setProfile(updatedProfile);
+          }}
+        />
+
+        <MovieDrawer
+          tmdbId={selectedMovieId}
+          isOpen={isDrawerOpen}
+          onClose={() => setIsDrawerOpen(false)}
+          onRated={() => {
+            loadSummary();
+            loadRated();
           }}
         />
       </div>

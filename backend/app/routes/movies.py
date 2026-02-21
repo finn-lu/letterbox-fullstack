@@ -5,6 +5,8 @@ from datetime import datetime
 from app.database import supabase, supabase_admin
 from app.services.tmdb import TMDBClient, transform_movie_for_api
 from app.schemas.movies import (
+    CustomListCreateRequest,
+    CustomListResponse,
     MovieResponse,
     RatingRequest,
     RatingResponse,
@@ -23,6 +25,8 @@ WATCHLIST_STATUS_LABELS = {
     "on_hold": "On hold",
     "dropped": "Dropped",
 }
+
+CUSTOM_LIST_SORT_MODES = {"manual", "recently_added", "rating_desc"}
 
 
 def _get_user_id_from_token(authorization: str | None) -> str:
@@ -536,6 +540,100 @@ def get_my_watchlist_details(authorization: str | None = Header(default=None)):
             for item in sorted_items
         ]
     }
+
+
+@router.get("/lists/me", response_model=dict)
+def get_my_custom_lists(authorization: str | None = Header(default=None)):
+    user_id = _get_user_id_from_token(authorization)
+    client = supabase_admin or supabase
+
+    try:
+        result = (
+            client.table("custom_lists")
+            .select("*")
+            .eq("user_id", user_id)
+            .order("updated_at", desc=True)
+            .execute()
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch custom lists: {exc}",
+        )
+
+    lists = result.data or []
+    return {
+        "lists": [
+            CustomListResponse(
+                id=item["id"],
+                user_id=item["user_id"],
+                name=item.get("name") or "Untitled list",
+                description=item.get("description"),
+                is_public=bool(item.get("is_public")),
+                sort_mode=item.get("sort_mode") or "manual",
+                created_at=item.get("created_at", ""),
+                updated_at=item.get("updated_at", ""),
+            )
+            for item in lists
+        ]
+    }
+
+
+@router.post("/lists", response_model=CustomListResponse, status_code=status.HTTP_201_CREATED)
+def create_custom_list(
+    payload: CustomListCreateRequest,
+    authorization: str | None = Header(default=None),
+):
+    user_id = _get_user_id_from_token(authorization)
+    client = supabase_admin or supabase
+
+    if payload.sort_mode not in CUSTOM_LIST_SORT_MODES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid sort mode",
+        )
+
+    name_value = payload.name.strip()
+    if not name_value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="List name is required",
+        )
+
+    description_value = payload.description.strip() if payload.description else None
+
+    try:
+        result = (
+            client.table("custom_lists")
+            .insert(
+                {
+                    "user_id": user_id,
+                    "name": name_value,
+                    "description": description_value,
+                    "is_public": payload.is_public,
+                    "sort_mode": payload.sort_mode,
+                    "updated_at": datetime.utcnow().isoformat(),
+                }
+            )
+            .execute()
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create custom list: {exc}",
+        )
+
+    item = result.data[0]
+    return CustomListResponse(
+        id=item["id"],
+        user_id=item["user_id"],
+        name=item.get("name") or "Untitled list",
+        description=item.get("description"),
+        is_public=bool(item.get("is_public")),
+        sort_mode=item.get("sort_mode") or "manual",
+        created_at=item.get("created_at", ""),
+        updated_at=item.get("updated_at", ""),
+    )
 
 
 @router.get("/profile/summary", response_model=dict)

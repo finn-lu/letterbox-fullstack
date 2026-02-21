@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import ProfileDisplay from "../components/profile-display";
 import ProfileEditModal from "../components/profile-edit-modal";
 import MovieDrawer from "../components/movie-drawer";
+import CreateListModal from "../components/create-list-modal";
 import { supabase } from "../lib/supabaseClient";
 
 type Profile = {
@@ -54,6 +55,17 @@ type RatedItem = {
   };
 };
 
+type CustomList = {
+  id: string;
+  user_id: string;
+  name: string;
+  description?: string | null;
+  is_public: boolean;
+  sort_mode: "manual" | "recently_added" | "rating_desc";
+  created_at: string;
+  updated_at: string;
+};
+
 const apiUrl = "/api";
 const tokenStorageKey = "letterbox_access_token";
 
@@ -64,33 +76,6 @@ const friends = [
   { name: "Jules", status: "Rated Poor Things 9.5" },
   { name: "Amir", status: "Added The Holdovers" },
   { name: "Mina", status: "Finished Past Lives" },
-];
-
-const suggestions = [
-  {
-    title: "Civil War",
-    poster: "https://image.tmdb.org/t/p/w500/6Rh0Q8L3st4iSMwK7ndFY8jZ7dU.jpg",
-  },
-  {
-    title: "Bottoms",
-    poster: "https://image.tmdb.org/t/p/w500/7TNoDC5mB8QMvW9j6iPV6oVwXlJ.jpg",
-  },
-  {
-    title: "Past Lives",
-    poster: "https://image.tmdb.org/t/p/w500/k3waqVXSnvCZWfJYNtdamTgTtTA.jpg",
-  },
-  {
-    title: "The Batman",
-    poster: "https://image.tmdb.org/t/p/w500/74xTEgt7R36Fpooo50r9T25onhq.jpg",
-  },
-  {
-    title: "Perfect Days",
-    poster: "https://image.tmdb.org/t/p/w500/l0Y9Dk9aCVlZr2K6mPMgh9H0B2O.jpg",
-  },
-  {
-    title: "Oppenheimer",
-    poster: "https://image.tmdb.org/t/p/w500/ptpr0kGAckfQkJeJIt8st5dglvd.jpg",
-  },
 ];
 
 export default function ProfilePage() {
@@ -105,11 +90,15 @@ export default function ProfilePage() {
   const [ratedError, setRatedError] = useState<string | null>(null);
   const [selectedMovieId, setSelectedMovieId] = useState<number | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [customLists, setCustomLists] = useState<CustomList[]>([]);
+  const [listsError, setListsError] = useState<string | null>(null);
+  const [showCreateListModal, setShowCreateListModal] = useState(false);
 
   useEffect(() => {
     loadProfile();
     loadSummary();
     loadRated();
+    loadCustomLists();
   }, []);
 
   async function loadProfile() {
@@ -199,6 +188,33 @@ export default function ProfilePage() {
     }
   }
 
+  async function loadCustomLists() {
+    setListsError(null);
+
+    const token = localStorage.getItem(tokenStorageKey);
+    if (!token) {
+      setListsError("No access token found. Please log in.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${apiUrl}/movies/lists/me`, {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        setListsError(data.detail || data.error || "Failed to load lists");
+        return;
+      }
+
+      setCustomLists(data.lists ?? []);
+    } catch (err) {
+      setListsError(`Error loading lists: ${String(err)}`);
+    }
+  }
+
   async function handleLogout() {
     await supabase.auth.signOut();
     localStorage.removeItem(tokenStorageKey);
@@ -207,7 +223,6 @@ export default function ProfilePage() {
 
   const recentItems = summary?.recent ?? [];
   const topRatedItems = summary?.top_rated ?? [];
-  const watchlistSummary = summary?.watchlist_summary ?? [];
   const ratingsCount = summary?.stats?.ratings_count ?? 0;
   const averageRating = summary?.stats
     ? summary.stats.average_rating.toFixed(1)
@@ -498,46 +513,46 @@ export default function ProfilePage() {
           </div>
         </section>
 
-        <section className="mt-12 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-            <h3 className="text-lg font-semibold">My lists</h3>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              {watchlistSummary.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-800 bg-slate-950/50 p-6 text-sm text-slate-400">
-                  Add movies to your watchlist to see progress here.
-                </div>
-              ) : (
-                watchlistSummary.map((item) => (
-                  <div
-                    key={item.status}
-                    className="rounded-xl bg-slate-950/70 p-4"
-                  >
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-                      {item.label}
-                    </p>
-                    <p className="mt-2 text-2xl font-semibold text-slate-100">
-                      {item.count}
-                    </p>
-                  </div>
-                ))
-              )}
+        <section className="mt-12">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 lg:min-h-[320px] lg:flex lg:flex-col">
+            <div className="flex items-center gap-3">
+              <h3 className="text-lg font-semibold">My lists</h3>
             </div>
-          </div>
-
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-            <h3 className="text-lg font-semibold">Suggestions for you</h3>
-            <p className="mt-2 text-xs text-slate-400">
-              Based on your watch history and top ratings.
-            </p>
-            <div className="mt-4 grid grid-cols-3 gap-3">
-              {suggestions.map((movie) => (
-                <img
-                  key={movie.title}
-                  src={movie.poster}
-                  alt={movie.title}
-                  className="h-28 w-full rounded-lg object-cover"
-                />
-              ))}
+            {listsError ? (
+              <p className="mt-4 text-xs text-rose-400">{listsError}</p>
+            ) : null}
+            {customLists.length === 0 ? (
+              <div className="mt-4 rounded-xl border border-dashed border-slate-800 bg-slate-950/50 p-6 text-sm text-slate-400">
+                You have no custom lists yet. Use the + button to create one.
+              </div>
+            ) : (
+              <div className="mt-4 space-y-3">
+                {customLists.map((list) => (
+                  <div key={list.id} className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-slate-100">{list.name}</p>
+                      <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-slate-500">
+                        <span>{list.is_public ? "Public" : "Private"}</span>
+                        <span>•</span>
+                        <span>{list.sort_mode.replace("_", " ")}</span>
+                      </div>
+                    </div>
+                    {list.description ? (
+                      <p className="mt-2 text-xs text-slate-400">{list.description}</p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="mt-6 flex justify-center pt-2 lg:mt-auto lg:pt-5">
+              <button
+                onClick={() => setShowCreateListModal(true)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-700 bg-slate-950/70 text-xl text-slate-100 transition hover:border-amber-400 hover:text-amber-300"
+                aria-label="Create new list"
+                title="Create new list"
+              >
+                +
+              </button>
             </div>
           </div>
         </section>
@@ -551,6 +566,14 @@ export default function ProfilePage() {
           }}
         />
 
+        <CreateListModal
+          isOpen={showCreateListModal}
+          onClose={() => setShowCreateListModal(false)}
+          onCreated={(list) => {
+            setCustomLists((previous) => [list, ...previous]);
+          }}
+        />
+
         <MovieDrawer
           tmdbId={selectedMovieId}
           isOpen={isDrawerOpen}
@@ -559,6 +582,7 @@ export default function ProfilePage() {
             loadSummary();
             loadRated();
           }}
+          onWatchlistChanged={() => loadSummary()}
         />
       </div>
     </div>

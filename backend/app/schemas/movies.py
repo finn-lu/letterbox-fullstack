@@ -46,3 +46,23 @@ class WatchlistResponse(BaseModel):
     tmdb_id: int
     status: str
     added_at: str
+
+
+class CustomListCreateRequest(BaseModel):
+    """Request model for creating a custom user list."""
+    name: str = Field(min_length=1, max_length=80)
+    description: Optional[str] = Field(default=None, max_length=300)
+    is_public: bool = Field(default=False)
+    sort_mode: str = Field(default="manual")  # manual, recently_added, rating_desc
+
+
+class CustomListResponse(BaseModel):
+    """Response model for a custom user list."""
+    id: str
+    user_id: str
+    name: str
+    description: Optional[str] = None
+    is_public: bool = False
+    sort_mode: str = "manual"
+    created_at: str
+    updated_at: str

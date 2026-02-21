@@ -33,17 +33,31 @@ CREATE TABLE IF NOT EXISTS watchlist (
   UNIQUE(user_id, tmdb_id)
 );
 
+-- Custom user lists table
+CREATE TABLE IF NOT EXISTS custom_lists (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  name VARCHAR(80) NOT NULL,
+  description TEXT,
+  is_public BOOLEAN DEFAULT FALSE,
+  sort_mode VARCHAR(30) DEFAULT 'manual' CHECK (sort_mode IN ('manual', 'recently_added', 'rating_desc')),
+  created_at TIMESTAMP DEFAULT now(),
+  updated_at TIMESTAMP DEFAULT now()
+);
+
 -- Create indexes for faster queries
 CREATE INDEX IF NOT EXISTS idx_profiles_user_id ON profiles(user_id);
 CREATE INDEX IF NOT EXISTS idx_ratings_user_id ON ratings(user_id);
 CREATE INDEX IF NOT EXISTS idx_ratings_tmdb_id ON ratings(tmdb_id);
 CREATE INDEX IF NOT EXISTS idx_watchlist_user_id ON watchlist(user_id);
 CREATE INDEX IF NOT EXISTS idx_watchlist_tmdb_id ON watchlist(tmdb_id);
+CREATE INDEX IF NOT EXISTS idx_custom_lists_user_id ON custom_lists(user_id);
 
 -- Enable RLS (Row Level Security) for security
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ratings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE watchlist ENABLE ROW LEVEL SECURITY;
+ALTER TABLE custom_lists ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policy: Users can only see and edit their own ratings
 DROP POLICY IF EXISTS "Users can view their own ratings" ON ratings;
@@ -77,6 +91,23 @@ CREATE POLICY "Users can update their own watchlist" ON watchlist
 
 DROP POLICY IF EXISTS "Users can delete their own watchlist" ON watchlist;
 CREATE POLICY "Users can delete their own watchlist" ON watchlist
+  FOR DELETE USING (auth.uid() = user_id);
+
+-- RLS Policy: Users can only see and edit their own custom lists
+DROP POLICY IF EXISTS "Users can view their own custom lists" ON custom_lists;
+CREATE POLICY "Users can view their own custom lists" ON custom_lists
+  FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can insert their own custom lists" ON custom_lists;
+CREATE POLICY "Users can insert their own custom lists" ON custom_lists
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can update their own custom lists" ON custom_lists;
+CREATE POLICY "Users can update their own custom lists" ON custom_lists
+  FOR UPDATE USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can delete their own custom lists" ON custom_lists;
+CREATE POLICY "Users can delete their own custom lists" ON custom_lists
   FOR DELETE USING (auth.uid() = user_id);
 
 -- RLS Policy: Users can view their own profile

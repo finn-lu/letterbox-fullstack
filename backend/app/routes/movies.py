@@ -4,10 +4,25 @@ from datetime import datetime
 
 from app.database import supabase, supabase_admin
 from app.services.tmdb import TMDBClient, transform_movie_for_api
-from app.schemas.movies import MovieResponse, RatingRequest, RatingResponse, WatchlistRequest
+from app.schemas.movies import (
+    MovieResponse,
+    RatingRequest,
+    RatingResponse,
+    WatchlistRequest,
+    WatchlistResponse,
+)
 from app.routes.auth import _extract_bearer_token
 
 router = APIRouter(prefix="/movies", tags=["movies"])
+
+
+WATCHLIST_STATUS_LABELS = {
+    "to_watch": "To watch",
+    "watching": "Watching",
+    "completed": "Completed",
+    "on_hold": "On hold",
+    "dropped": "Dropped",
+}
 
 
 def _get_user_id_from_token(authorization: str | None) -> str:
@@ -385,6 +400,144 @@ def get_my_ratings_details(authorization: str | None = Header(default=None)):
     }
 
 
+@router.post("/watchlist", response_model=WatchlistResponse, status_code=status.HTTP_201_CREATED)
+def upsert_watchlist_item(
+    payload: WatchlistRequest,
+    authorization: str | None = Header(default=None),
+):
+    user_id = _get_user_id_from_token(authorization)
+    client = supabase_admin or supabase
+
+    if payload.status not in WATCHLIST_STATUS_LABELS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid watchlist status",
+        )
+
+    try:
+        existing = (
+            client.table("watchlist")
+            .select("id")
+            .eq("user_id", user_id)
+            .eq("tmdb_id", payload.tmdb_id)
+            .limit(1)
+            .execute()
+        )
+
+        if existing.data:
+            watchlist_id = existing.data[0]["id"]
+            result = (
+                client.table("watchlist")
+                .update(
+                    {
+                        "status": payload.status,
+                        "updated_at": datetime.utcnow().isoformat(),
+                    }
+                )
+                .eq("id", watchlist_id)
+                .execute()
+            )
+        else:
+            result = (
+                client.table("watchlist")
+                .insert(
+                    {
+                        "user_id": user_id,
+                        "tmdb_id": payload.tmdb_id,
+                        "status": payload.status,
+                    }
+                )
+                .execute()
+            )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to save watchlist item: {exc}",
+        )
+
+    watchlist_item = result.data[0]
+    return WatchlistResponse(
+        id=watchlist_item["id"],
+        user_id=watchlist_item["user_id"],
+        tmdb_id=watchlist_item["tmdb_id"],
+        status=watchlist_item.get("status") or "to_watch",
+        added_at=watchlist_item.get("created_at", ""),
+    )
+
+
+@router.delete("/watchlist/{tmdb_id}", response_model=dict)
+def delete_watchlist_item(
+    tmdb_id: int,
+    authorization: str | None = Header(default=None),
+):
+    user_id = _get_user_id_from_token(authorization)
+    client = supabase_admin or supabase
+
+    try:
+        result = (
+            client.table("watchlist")
+            .delete()
+            .eq("user_id", user_id)
+            .eq("tmdb_id", tmdb_id)
+            .execute()
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to remove watchlist item: {exc}",
+        )
+
+    removed = bool(result.data)
+    return {"removed": removed}
+
+
+@router.get("/watchlist/me/details", response_model=dict)
+def get_my_watchlist_details(authorization: str | None = Header(default=None)):
+    user_id = _get_user_id_from_token(authorization)
+    client = supabase_admin or supabase
+
+    try:
+        result = client.table("watchlist").select("*").eq("user_id", user_id).execute()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch watchlist: {exc}",
+        )
+
+    watchlist_items = result.data or []
+    sorted_items = sorted(
+        watchlist_items,
+        key=lambda entry: _parse_datetime(entry.get("updated_at") or entry.get("created_at")),
+        reverse=True,
+    )
+
+    tmdb_ids = list(
+        {
+            item.get("tmdb_id")
+            for item in sorted_items
+            if item.get("tmdb_id")
+        }
+    )
+    movie_map = _fetch_movie_map(tmdb_ids)
+
+    return {
+        "watchlist": [
+            {
+                "tmdb_id": item.get("tmdb_id"),
+                "status": item.get("status") or "to_watch",
+                "label": WATCHLIST_STATUS_LABELS.get(
+                    item.get("status") or "to_watch",
+                    (item.get("status") or "to_watch").replace("_", " ").title(),
+                ),
+                "created_at": item.get("created_at", ""),
+                "updated_at": item.get("updated_at", ""),
+                "movie": movie_map.get(item.get("tmdb_id")),
+            }
+            for item in sorted_items
+        ]
+    }
+
+
 @router.get("/profile/summary", response_model=dict)
 def get_profile_summary(authorization: str | None = Header(default=None)):
     user_id = _get_user_id_from_token(authorization)
@@ -451,14 +604,7 @@ def get_profile_summary(authorization: str | None = Header(default=None)):
         else 0.0
     )
 
-    status_labels = {
-        "to_watch": "To watch",
-        "watching": "Watching",
-        "completed": "Completed",
-        "on_hold": "On hold",
-        "dropped": "Dropped",
-    }
-    status_counts: dict[str, int] = {key: 0 for key in status_labels}
+    status_counts: dict[str, int] = {key: 0 for key in WATCHLIST_STATUS_LABELS}
     for entry in watchlist:
         status_value = entry.get("status") or "to_watch"
         if status_value not in status_counts:
@@ -468,7 +614,7 @@ def get_profile_summary(authorization: str | None = Header(default=None)):
     watchlist_summary = [
         {
             "status": status,
-            "label": status_labels.get(status, status.replace("_", " ").title()),
+            "label": WATCHLIST_STATUS_LABELS.get(status, status.replace("_", " ").title()),
             "count": count,
         }
         for status, count in status_counts.items()

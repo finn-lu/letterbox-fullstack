@@ -6,6 +6,13 @@ import CameraRating from "./camera-rating";
 const apiUrl = "/api";
 const tokenStorageKey = "letterbox_access_token";
 const posterBaseUrl = "https://image.tmdb.org/t/p/w500";
+const watchlistStatuses = [
+  { value: "to_watch", label: "To watch" },
+  { value: "watching", label: "Watching" },
+  { value: "completed", label: "Completed" },
+  { value: "on_hold", label: "On hold" },
+  { value: "dropped", label: "Dropped" },
+] as const;
 
 type MovieDetails = {
   movie: {
@@ -41,6 +48,7 @@ type MovieDrawerProps = {
   initialRating?: number;
   onClose: () => void;
   onRated?: (tmdbId: number, rating: number) => void;
+  onWatchlistChanged?: () => void;
 };
 
 export default function MovieDrawer({
@@ -49,12 +57,14 @@ export default function MovieDrawer({
   initialRating,
   onClose,
   onRated,
+  onWatchlistChanged,
 }: MovieDrawerProps) {
   const [details, setDetails] = useState<MovieDetails | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedRating, setSelectedRating] = useState<number | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [listStatus, setListStatus] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen || !tmdbId) return;
@@ -99,6 +109,10 @@ export default function MovieDrawer({
     setSelectedRating(initialRating ?? null);
   }, [initialRating, tmdbId]);
 
+  useEffect(() => {
+    setListStatus(details?.personal_lists?.watchlist_status ?? null);
+  }, [details?.personal_lists?.watchlist_status, tmdbId]);
+
   if (!isOpen || !tmdbId) return null;
 
   const movie = details?.movie;
@@ -109,6 +123,8 @@ export default function MovieDrawer({
   const personalLists = details?.personal_lists;
 
   async function handleSaveRating() {
+    if (!tmdbId) return;
+
     if (!selectedRating) {
       setStatus("Choose a rating first.");
       return;
@@ -137,11 +153,109 @@ export default function MovieDrawer({
       }
 
       setStatus(`Saved ${selectedRating.toFixed(1)}/10`);
+      setDetails((prev) =>
+        prev
+          ? {
+              ...prev,
+              personal_lists: {
+                rated: true,
+                rating: selectedRating,
+                watchlist_status: prev.personal_lists?.watchlist_status ?? null,
+              },
+            }
+          : prev
+      );
       if (onRated) {
         onRated(tmdbId, selectedRating);
       }
     } catch (err) {
       setStatus(`Rating failed: ${String(err)}`);
+    }
+  }
+
+  async function handleSaveWatchlist(nextStatus: string) {
+    if (!tmdbId) return;
+
+    const token = localStorage.getItem(tokenStorageKey);
+    if (!token) {
+      setStatus("Please log in to manage your lists.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${apiUrl}/movies/watchlist`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tmdb_id: tmdbId, status: nextStatus }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        setStatus(data.detail || data.error || "Failed to update watchlist.");
+        return;
+      }
+
+      setListStatus(nextStatus);
+      setStatus(`List updated: ${nextStatus.replace("_", " ")}`);
+      setDetails((prev) =>
+        prev
+          ? {
+              ...prev,
+              personal_lists: {
+                rated: prev.personal_lists?.rated ?? false,
+                rating: prev.personal_lists?.rating ?? null,
+                watchlist_status: nextStatus,
+              },
+            }
+          : prev
+      );
+      onWatchlistChanged?.();
+    } catch (err) {
+      setStatus(`List update failed: ${String(err)}`);
+    }
+  }
+
+  async function handleRemoveWatchlist() {
+    if (!tmdbId) return;
+
+    const token = localStorage.getItem(tokenStorageKey);
+    if (!token) {
+      setStatus("Please log in to manage your lists.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${apiUrl}/movies/watchlist/${tmdbId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        setStatus(data.detail || data.error || "Failed to remove watchlist item.");
+        return;
+      }
+
+      setListStatus(null);
+      setStatus("Removed from watchlist.");
+      setDetails((prev) =>
+        prev
+          ? {
+              ...prev,
+              personal_lists: {
+                rated: prev.personal_lists?.rated ?? false,
+                rating: prev.personal_lists?.rating ?? null,
+                watchlist_status: null,
+              },
+            }
+          : prev
+      );
+      onWatchlistChanged?.();
+    } catch (err) {
+      setStatus(`Removal failed: ${String(err)}`);
     }
   }
 
@@ -287,8 +401,8 @@ export default function MovieDrawer({
                       <p>Rated: Not yet</p>
                     )}
                     <p>
-                      Watchlist: {personalLists?.watchlist_status
-                        ? personalLists.watchlist_status.replace("_", " ")
+                      Watchlist: {listStatus
+                        ? listStatus.replace("_", " ")
                         : "Not in list"}
                     </p>
                   </div>
@@ -304,6 +418,33 @@ export default function MovieDrawer({
                   >
                     Save rating
                   </button>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <select
+                      value={listStatus ?? ""}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        if (value) {
+                          handleSaveWatchlist(value);
+                        }
+                      }}
+                      className="rounded-full border border-slate-700 bg-slate-950/80 px-3 py-2 text-xs text-slate-200 focus:border-amber-400 focus:outline-none"
+                    >
+                      <option value="">Add to list…</option>
+                      {watchlistStatuses.map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                    {listStatus ? (
+                      <button
+                        onClick={handleRemoveWatchlist}
+                        className="rounded-full border border-rose-500/50 px-3 py-2 text-xs text-rose-200 hover:border-rose-400"
+                      >
+                        Remove
+                      </button>
+                    ) : null}
+                  </div>
                   {status ? (
                     <p className="mt-2 text-xs text-slate-400">{status}</p>
                   ) : null}

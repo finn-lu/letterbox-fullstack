@@ -7,6 +7,13 @@ import CameraRating from "../../components/camera-rating";
 const apiUrl = "/api";
 const tokenStorageKey = "letterbox_access_token";
 const imageBaseUrl = "https://image.tmdb.org/t/p/w500";
+const watchlistStatuses = [
+  { value: "to_watch", label: "To watch" },
+  { value: "watching", label: "Watching" },
+  { value: "completed", label: "Completed" },
+  { value: "on_hold", label: "On hold" },
+  { value: "dropped", label: "Dropped" },
+] as const;
 
 type MovieDetails = {
   movie: {
@@ -46,6 +53,7 @@ export default function MovieDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedRating, setSelectedRating] = useState<number | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [listStatus, setListStatus] = useState<string | null>(null);
 
   useEffect(() => {
     if (!movieId || Number.isNaN(movieId)) {
@@ -73,6 +81,7 @@ export default function MovieDetailsPage() {
         if (!isActive) return;
         setDetails(data);
         setSelectedRating(data.personal_lists?.rating ?? null);
+        setListStatus(data.personal_lists?.watchlist_status ?? null);
       })
       .catch((err) => {
         if (!isActive) return;
@@ -131,6 +140,86 @@ export default function MovieDetailsPage() {
       );
     } catch (err) {
       setStatus(`Rating failed: ${String(err)}`);
+    }
+  }
+
+  async function saveWatchlistStatus(nextStatus: string) {
+    const token = localStorage.getItem(tokenStorageKey);
+    if (!token) {
+      setStatus("Please log in to manage your lists.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${apiUrl}/movies/watchlist`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tmdb_id: movieId, status: nextStatus }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        setStatus(data.detail || data.error || "Failed to update watchlist.");
+        return;
+      }
+
+      setListStatus(nextStatus);
+      setStatus(`List updated: ${nextStatus.replace("_", " ")}`);
+      setDetails((prev) =>
+        prev
+          ? {
+              ...prev,
+              personal_lists: {
+                rated: prev.personal_lists?.rated ?? false,
+                rating: prev.personal_lists?.rating ?? null,
+                watchlist_status: nextStatus,
+              },
+            }
+          : prev
+      );
+    } catch (err) {
+      setStatus(`List update failed: ${String(err)}`);
+    }
+  }
+
+  async function removeFromWatchlist() {
+    const token = localStorage.getItem(tokenStorageKey);
+    if (!token) {
+      setStatus("Please log in to manage your lists.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${apiUrl}/movies/watchlist/${movieId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        setStatus(data.detail || data.error || "Failed to remove watchlist item.");
+        return;
+      }
+
+      setListStatus(null);
+      setStatus("Removed from watchlist.");
+      setDetails((prev) =>
+        prev
+          ? {
+              ...prev,
+              personal_lists: {
+                rated: prev.personal_lists?.rated ?? false,
+                rating: prev.personal_lists?.rating ?? null,
+                watchlist_status: null,
+              },
+            }
+          : prev
+      );
+    } catch (err) {
+      setStatus(`Removal failed: ${String(err)}`);
     }
   }
 
@@ -237,7 +326,7 @@ export default function MovieDetailsPage() {
               Rated: {details.personal_lists?.rated ? `${details.personal_lists.rating?.toFixed(1)}/10` : "No"}
             </p>
             <p className="text-sm text-slate-300">
-              Watchlist: {details.personal_lists?.watchlist_status ? details.personal_lists.watchlist_status.replace("_", " ") : "Not in list"}
+              Watchlist: {listStatus ? listStatus.replace("_", " ") : "Not in list"}
             </p>
 
             <div className="mt-4">
@@ -249,6 +338,33 @@ export default function MovieDetailsPage() {
             >
               Save rating
             </button>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <select
+                value={listStatus ?? ""}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  if (value) {
+                    saveWatchlistStatus(value);
+                  }
+                }}
+                className="rounded-full border border-slate-700 bg-slate-950/80 px-3 py-2 text-xs text-slate-200 focus:border-amber-400 focus:outline-none"
+              >
+                <option value="">Add to list…</option>
+                {watchlistStatuses.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+              {listStatus ? (
+                <button
+                  onClick={removeFromWatchlist}
+                  className="rounded-full border border-rose-500/50 px-3 py-2 text-xs text-rose-200 hover:border-rose-400"
+                >
+                  Remove
+                </button>
+              ) : null}
+            </div>
             {status ? <p className="mt-2 text-xs text-slate-400">{status}</p> : null}
           </div>
 

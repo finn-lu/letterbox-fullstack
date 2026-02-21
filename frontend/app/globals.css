@@ -41,3 +41,19 @@ h4 {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+a,
+button,
+[role="button"],
+summary,
+label[for] {
+  cursor: pointer;
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed;
+}

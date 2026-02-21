@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./lib/supabaseClient";
 import MovieDrawer from "./components/movie-drawer";
+import MovieSearch from "./components/movie-search";
 
 type SessionUser = {
   email?: string | null;
@@ -126,17 +127,17 @@ export default function Home() {
         <div className="absolute bottom-0 left-1/3 h-96 w-96 rounded-full bg-rose-500/10 blur-3xl" />
       </div>
 
-      <header className="relative z-10">
-        <nav className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6">
+      <header className="relative z-40">
+        <nav className="relative mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-full bg-gradient-to-br from-amber-400 to-rose-500" />
             <span className="text-xl font-semibold tracking-wide">Letterbox</span>
           </div>
-          <div className="hidden gap-6 text-sm text-slate-300 md:flex">
-            <a href="#now-showing" className="hover:text-white">Now</a>
-            <a href="#critics" className="hover:text-white">Critics</a>
-            <a href="#hidden-gems" className="hover:text-white">Hidden gems</a>
+
+          <div className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 md:block">
+            <MovieSearch />
           </div>
+
           <div className="flex items-center gap-3">
             {sessionUser ? (
               <a
@@ -189,10 +190,10 @@ export default function Home() {
             </p>
             <div className="flex flex-wrap gap-4">
               <a
-                href="/login"
+                href={sessionUser ? "/profile" : "/login"}
                 className="rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold text-slate-950 hover:bg-emerald-300"
               >
-                Start rating
+                {sessionUser ? "Go to profile" : "Start rating"}
               </a>
               <a
                 href="#now-showing"

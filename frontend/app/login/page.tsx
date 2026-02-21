@@ -186,8 +186,12 @@ export default function LoginPage() {
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <div className="mx-auto w-full max-w-xl px-6 py-10">
         <div className="mb-6 flex items-center justify-between">
-          <a href="/" className="text-sm text-slate-300 hover:text-white">
-            Back to landing
+          <a
+            href="/"
+            className="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/70 px-4 py-2 text-sm text-slate-200 transition hover:border-slate-500 hover:text-white"
+          >
+            <span aria-hidden="true">←</span>
+            Back
           </a>
           <div className="text-xs text-slate-400">Auth Portal</div>
         </div>

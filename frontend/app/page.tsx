@@ -130,7 +130,14 @@ export default function Home() {
       <header className="relative z-40">
         <nav className="relative mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-amber-400 to-rose-500" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-900/80 text-amber-400 shadow-lg shadow-black/20">
+              <svg viewBox="0 0 24 24" className="h-6 w-6" aria-hidden="true">
+                <rect x="4" y="8" width="13" height="10" rx="2" fill="currentColor" />
+                <rect x="8" y="6" width="3" height="2" rx="1" fill="currentColor" />
+                <circle cx="10.5" cy="13" r="2.5" fill="#0f172a" />
+                <polygon points="17,10 21,8.5 21,17.5 17,16" fill="currentColor" />
+              </svg>
+            </div>
             <span className="text-xl font-semibold tracking-wide">Letterbox</span>
           </div>
 

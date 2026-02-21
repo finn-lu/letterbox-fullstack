@@ -227,9 +227,10 @@ export default function ProfilePage() {
         <div className="mb-8 flex items-center justify-between">
           <button
             onClick={() => router.push("/")}
-            className="text-sm text-slate-300 hover:text-white"
+            className="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/70 px-4 py-2 text-sm text-slate-200 transition hover:border-slate-500 hover:text-white"
           >
-            ← Back to landing
+            <span aria-hidden="true">←</span>
+            Back
           </button>
           <button
             onClick={handleLogout}

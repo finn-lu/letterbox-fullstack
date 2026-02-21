@@ -8,27 +8,29 @@ type CameraRatingProps = {
 };
 
 function CameraIcon({ fill, clipId }: { fill: number; clipId: string }) {
-  const hasFill = fill > 0;
-  const hasHalf = fill === 0.5;
-  const opacity = hasFill ? 1 : 0.2;
+  const clipWidth = fill >= 1 ? 24 : fill >= 0.5 ? 12 : 0;
 
   return (
     <svg viewBox="0 0 24 24" className="h-6 w-6" aria-hidden="true">
       <defs>
         <clipPath id={clipId}>
-          <rect x="0" y="0" width="12" height="24" />
+          <rect x="0" y="0" width={clipWidth} height="24" />
         </clipPath>
       </defs>
-      <rect x="3" y="8" width="18" height="12" rx="2" fill="currentColor" opacity={opacity} />
-      <rect x="7" y="5" width="4" height="3" rx="1" fill="currentColor" opacity={opacity} />
-      <circle cx="12" cy="14" r="3.5" fill="currentColor" opacity={opacity} />
-      {hasHalf && (
-        <g clipPath={`url(#${clipId})`}>
-          <rect x="3" y="8" width="18" height="12" rx="2" fill="currentColor" />
-          <rect x="7" y="5" width="4" height="3" rx="1" fill="currentColor" />
-          <circle cx="12" cy="14" r="3.5" fill="currentColor" />
-        </g>
-      )}
+
+      <g fill="none" stroke="currentColor" strokeWidth="1.8" opacity="0.35">
+        <circle cx="8" cy="7" r="3" />
+        <circle cx="13" cy="6.2" r="2.4" />
+        <rect x="4" y="10" width="11" height="8" rx="1.5" />
+        <polygon points="15,12 20,10.2 20,17.8 15,16" />
+      </g>
+
+      <g fill="none" stroke="currentColor" strokeWidth="1.8" clipPath={`url(#${clipId})`}>
+        <circle cx="8" cy="7" r="3" />
+        <circle cx="13" cy="6.2" r="2.4" />
+        <rect x="4" y="10" width="11" height="8" rx="1.5" />
+        <polygon points="15,12 20,10.2 20,17.8 15,16" />
+      </g>
     </svg>
   );
 }

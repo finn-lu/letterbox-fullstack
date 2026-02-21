@@ -141,8 +141,12 @@ export default function MovieDetailsPage() {
   if (error || !details?.movie) {
     return (
       <div className="min-h-screen bg-slate-950 p-8 text-slate-200">
-        <button onClick={() => router.push("/")} className="mb-4 text-sm text-slate-400 hover:text-white">
-          ← Back
+        <button
+          onClick={() => router.push("/")}
+          className="mb-4 inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/70 px-4 py-2 text-sm text-slate-200 transition hover:border-slate-500 hover:text-white"
+        >
+          <span aria-hidden="true">←</span>
+          Back
         </button>
         <p className="text-rose-300">{error ?? "Movie not found"}</p>
       </div>
@@ -156,8 +160,12 @@ export default function MovieDetailsPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <button onClick={() => router.push("/")} className="mb-6 text-sm text-slate-400 hover:text-white">
-          ← Back to landing
+        <button
+          onClick={() => router.push("/")}
+          className="mb-6 inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/70 px-4 py-2 text-sm text-slate-200 transition hover:border-slate-500 hover:text-white"
+        >
+          <span aria-hidden="true">←</span>
+          Back
         </button>
 
         <section className="relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/80">

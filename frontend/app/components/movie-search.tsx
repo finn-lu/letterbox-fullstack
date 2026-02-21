@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 
 type SearchMovie = {
@@ -19,6 +19,7 @@ export default function MovieSearch() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<SearchMovie[]>([]);
+  const [activeIndex, setActiveIndex] = useState<number>(-1);
 
   useEffect(() => {
     function onDocumentMouseDown(event: MouseEvent) {
@@ -35,6 +36,7 @@ export default function MovieSearch() {
     const trimmedQuery = query.trim();
     if (!trimmedQuery) {
       setSuggestions([]);
+      setActiveIndex(-1);
       setIsLoading(false);
       return;
     }
@@ -46,11 +48,15 @@ export default function MovieSearch() {
         const data = await response.json();
         if (!response.ok) {
           setSuggestions([]);
+          setActiveIndex(-1);
           return;
         }
-        setSuggestions((data.movies ?? []).slice(0, 6));
+        const nextSuggestions = (data.movies ?? []).slice(0, 6);
+        setSuggestions(nextSuggestions);
+        setActiveIndex(-1);
       } catch {
         setSuggestions([]);
+        setActiveIndex(-1);
       } finally {
         setIsLoading(false);
       }
@@ -63,7 +69,39 @@ export default function MovieSearch() {
     setIsExpanded(false);
     setQuery("");
     setSuggestions([]);
+    setActiveIndex(-1);
     router.push(`/movie/${tmdbId}`);
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setIsExpanded(false);
+      setActiveIndex(-1);
+      return;
+    }
+
+    if (!suggestions.length) {
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveIndex((prev) => (prev + 1) % suggestions.length);
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveIndex((prev) => (prev <= 0 ? suggestions.length - 1 : prev - 1));
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const indexToOpen = activeIndex >= 0 ? activeIndex : 0;
+      openMovie(suggestions[indexToOpen].tmdb_id);
+    }
   }
 
   const shouldShowDropdown = isExpanded && (isLoading || suggestions.length > 0 || query.trim().length > 0);
@@ -92,6 +130,7 @@ export default function MovieSearch() {
             autoFocus
             value={query}
             onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder="Search movies"
             className="w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500"
           />
@@ -105,15 +144,18 @@ export default function MovieSearch() {
           ) : suggestions.length === 0 ? (
             <p className="px-4 py-3 text-sm text-slate-400">No matching movies.</p>
           ) : (
-            suggestions.map((movie) => {
+            suggestions.map((movie, index) => {
               const year = movie.release_date ? movie.release_date.split("-")[0] : "—";
               return (
                 <button
                   key={movie.tmdb_id}
                   type="button"
                   onMouseDown={(event) => event.preventDefault()}
+                  onMouseEnter={() => setActiveIndex(index)}
                   onClick={() => openMovie(movie.tmdb_id)}
-                  className="flex w-full items-center gap-3 border-b border-slate-900 px-4 py-3 text-left hover:bg-slate-900/80"
+                  className={`flex w-full items-center gap-3 border-b border-slate-900 px-4 py-3 text-left hover:bg-slate-900/80 ${
+                    index === activeIndex ? "bg-slate-900/80" : ""
+                  }`}
                 >
                   {movie.poster_path ? (
                     <img

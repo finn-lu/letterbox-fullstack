@@ -547,11 +547,23 @@ export default function ProfilePage() {
             <div className="mt-6 flex justify-center pt-2 lg:mt-auto lg:pt-5">
               <button
                 onClick={() => setShowCreateListModal(true)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-700 bg-slate-950/70 text-xl text-slate-100 transition hover:border-amber-400 hover:text-amber-300"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-emerald-400 text-slate-950 transition hover:bg-emerald-300"
                 aria-label="Create new list"
                 title="Create new list"
               >
-                +
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  className="h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 5v14" />
+                  <path d="M5 12h14" />
+                </svg>
               </button>
             </div>
           </div>

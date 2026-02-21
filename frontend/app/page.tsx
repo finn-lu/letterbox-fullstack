@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "./lib/supabaseClient";
 import MovieDrawer from "./components/movie-drawer";
 import MovieSearch from "./components/movie-search";
@@ -51,6 +51,7 @@ export default function Home() {
   const [shelfError, setShelfError] = useState<string | null>(null);
   const [selectedMovieId, setSelectedMovieId] = useState<number | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const shelfRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -117,6 +118,14 @@ export default function Home() {
 
   function closeMovie() {
     setIsDrawerOpen(false);
+  }
+
+  function scrollShelf(shelfId: string, direction: "left" | "right") {
+    const container = shelfRefs.current[shelfId];
+    if (!container) return;
+
+    const offset = direction === "left" ? -460 : 460;
+    container.scrollBy({ left: offset, behavior: "smooth" });
   }
 
   return (
@@ -239,39 +248,68 @@ export default function Home() {
                   Scroll
                 </span>
               </div>
-              <div className="no-scrollbar flex gap-5 overflow-x-auto pb-2">
-                {shelf.movies.map((movie) => (
-                  <div
-                    key={`${shelf.id}-${movie.tmdb_id}`}
-                    className="group relative min-w-[180px] rounded-2xl border border-slate-800 bg-slate-900/70 p-3 shadow-lg shadow-black/30 transition hover:-translate-y-2"
-                    onClick={() => openMovie(movie.tmdb_id)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        openMovie(movie.tmdb_id);
-                      }
-                    }}
-                  >
-                    <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-amber-500/10 to-rose-500/10 opacity-0 transition group-hover:opacity-100" />
-                    {movie.poster_path ? (
-                      <img
-                        src={`${posterBaseUrl}${movie.poster_path}`}
-                        alt={movie.title}
-                        className="relative z-10 h-60 w-full rounded-xl object-cover"
-                      />
-                    ) : (
-                      <div className="relative z-10 flex h-60 w-full items-center justify-center rounded-xl bg-slate-900/60 px-3 text-center text-xs text-slate-400">
-                        {movie.title}
+              <div className="group relative">
+                <button
+                  onClick={() => scrollShelf(shelf.id, "left")}
+                  className="pointer-events-none absolute left-2 top-1/2 z-20 -translate-y-1/2 rounded-full border border-slate-700/80 bg-slate-950/80 p-2 text-slate-100 opacity-0 shadow-lg shadow-black/30 transition duration-200 group-hover:pointer-events-auto group-hover:opacity-100 focus:pointer-events-auto focus:opacity-100"
+                  aria-label={`Scroll ${shelf.label} left`}
+                  title="Scroll left"
+                >
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="m15 18-6-6 6-6" />
+                  </svg>
+                </button>
+
+                <button
+                  onClick={() => scrollShelf(shelf.id, "right")}
+                  className="pointer-events-none absolute right-2 top-1/2 z-20 -translate-y-1/2 rounded-full border border-slate-700/80 bg-slate-950/80 p-2 text-slate-100 opacity-0 shadow-lg shadow-black/30 transition duration-200 group-hover:pointer-events-auto group-hover:opacity-100 focus:pointer-events-auto focus:opacity-100"
+                  aria-label={`Scroll ${shelf.label} right`}
+                  title="Scroll right"
+                >
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="m9 6 6 6-6 6" />
+                  </svg>
+                </button>
+
+                <div
+                  ref={(element) => {
+                    shelfRefs.current[shelf.id] = element;
+                  }}
+                  className="no-scrollbar flex gap-5 overflow-x-auto pb-2"
+                >
+                  {shelf.movies.map((movie) => (
+                    <div
+                      key={`${shelf.id}-${movie.tmdb_id}`}
+                      className="group relative min-w-[180px] rounded-2xl border border-slate-800 bg-slate-900/70 p-3 shadow-lg shadow-black/30 transition hover:-translate-y-2"
+                      onClick={() => openMovie(movie.tmdb_id)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          openMovie(movie.tmdb_id);
+                        }
+                      }}
+                    >
+                      <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-amber-500/10 to-rose-500/10 opacity-0 transition group-hover:opacity-100" />
+                      {movie.poster_path ? (
+                        <img
+                          src={`${posterBaseUrl}${movie.poster_path}`}
+                          alt={movie.title}
+                          className="relative z-10 h-60 w-full rounded-xl object-cover"
+                        />
+                      ) : (
+                        <div className="relative z-10 flex h-60 w-full items-center justify-center rounded-xl bg-slate-900/60 px-3 text-center text-xs text-slate-400">
+                          {movie.title}
+                        </div>
+                      )}
+                      <div className="relative z-10 mt-3">
+                        <p className="text-sm font-semibold text-slate-100">{movie.title}</p>
+                        <p className="text-xs text-slate-400">Curated pick</p>
                       </div>
-                    )}
-                    <div className="relative z-10 mt-3">
-                      <p className="text-sm font-semibold text-slate-100">{movie.title}</p>
-                      <p className="text-xs text-slate-400">Curated pick</p>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
           ))}
